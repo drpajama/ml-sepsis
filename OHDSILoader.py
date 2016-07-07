@@ -3,14 +3,15 @@ import psycopg2
 import VisitOccurence
 import CareSite
 
-class OHDSILoader:
+class OHDSIConnection:
+    visits = None
+    care_sites = None
 
     def __init__ (self, dbname, user, password):
         self.initialized = False
         self.dbname = dbname
         self.user = user
         self.password = password
-
 
     def initialize(self):
         conn_string = "dbname='" + self.dbname + "' user = '" + self.user + "' password = '" + self.password + "'"
@@ -33,6 +34,9 @@ class OHDSILoader:
         return self.excuteSQL("SELECT * from ohdsi.care_site")
 
     def get_caresites(self):
+        if (self.care_sites != None):
+            return self.care_sites
+
         data = self.get_caresites_raw()
         sites = []
 
@@ -47,9 +51,13 @@ class OHDSILoader:
             )
             sites.append (site)
 
+        self.care_sites = sites
         return sites
 
     def get_visit_occurence(self):
+        if (self.visits != None):
+            return self.visits
+
         data = self.get_visit_occurence_raw()
         visits = []
 
@@ -70,7 +78,15 @@ class OHDSILoader:
             )
             visits.append(visit)
 
+        self.visits = visits
         return visits
+
+    def get_all_visits_by_patient_id(self, person_id):
+        self.get_visit_occurence()
+        visits_by_patient = []
+
+        for visit in self.visits:
+            if visit.person_id ==
 
 
 
