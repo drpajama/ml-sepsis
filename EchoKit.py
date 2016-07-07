@@ -12,17 +12,20 @@ class Echo:
 
     talking = True
 
-    care_sites = None
     focus = None
     visits_interested = None
     patients_interested = None
     cursors_interested = None
     db_connect = None
 
+    ask = None
+    gather = None
+
     def __init__ (self, db_connect):
         self.db_connect = db_connect
-        self.care_sites = self.get_caresites()
         self.focus = Focus()
+        self.ask = AskEcho(self)
+        self.gather = GatherEcho(self)
 
     def hello_echo(self):
 
@@ -46,63 +49,6 @@ class Echo:
         cur = self.db_connect.cursor()
         cur.execute (query)
         return cur.fetchall()
-
-    def get_caresites_raw(self):
-        return self.excuteSQL("SELECT * from ohdsi.care_site")
-
-    def get_caresites(self):
-        if (self.care_sites != None):
-            return self.care_sites
-
-        data = self.get_caresites_raw()
-        sites = []
-
-        for single_site in data:
-
-            #concept_id = single_site[2]
-            site = CareSite.CareSite (
-                site_id = single_site[0],
-                site_name = single_site[1],
-                site_concept_id = single_site[2],
-                site_source_value = single_site[5]
-            )
-            sites.append (site)
-
-        self.care_sites = sites
-        return sites
-
-
-    def get_all_visit_occurence_raw(self):
-        return self.excuteSQL("SELECT * from ohdsi.visit_occurrence")
-
-    def get_random_visits(self, number = 1):
-        data = self.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE random () < 0.01 LIMIT " + str(number))
-        return self.get_visit_occurence_with_data(data)
-
-    def get_visit_occurence_with_data(self, data):
-        visits = []
-
-        for single_visit_data in data:
-            # single_visit_data[2] is concept_id for 'inpatient visit (9201), which is obvious when building an object for ICUVisit
-
-            site = CareSite.get_site_by_name(self.care_sites, single_visit_data[9])
-
-            visit = ICUVisit(
-                visit_id=single_visit_data[0],
-                person_id=single_visit_data[1],
-                start_date=single_visit_data[3],
-                start_time=single_visit_data[4],
-                end_date=single_visit_data[5],
-                end_time=single_visit_data[6],
-                care_site=site
-            )
-            visits.append(visit)
-        return visits
-
-
-    def get_all_visit_occurence(self):
-        data = self.get_all_visit_occurence_raw()
-        return self.get_visit_occurence_with_data(data)
 
 
     def set_focus(self, target):
@@ -286,6 +232,157 @@ class Focus:
         return 1
 
 '''
+
+'''
+class NoiseReducer:
+
+class TrendSetter:
+
+
+'''
+
+class GatherEcho:
+    echo = None
+    care_sites = None
+
+    def __init__(self, echo):
+        self.echo = echo
+        self.care_sites = self.get_caresites()
+
+    def get_random_visits(self, number = 1):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE random () < 0.01 LIMIT " + str(number))
+        return self.get_visit_occurence_with_data(data)
+
+    def get_caresites_raw(self):
+        return self.echo.excuteSQL("SELECT * from ohdsi.care_site")
+
+    def get_caresites(self):
+        if (self.care_sites != None):
+            return self.care_sites
+
+        data = self.get_caresites_raw()
+        sites = []
+
+        for single_site in data:
+
+            #concept_id = single_site[2]
+            site = CareSite.CareSite (
+                site_id = single_site[0],
+                site_name = single_site[1],
+                site_concept_id = single_site[2],
+                site_source_value = single_site[5]
+            )
+            sites.append (site)
+
+        self.care_sites = sites
+        return sites
+
+
+    def get_all_visit_occurence_raw(self):
+        return self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence")
+
+
+
+    def get_visit_occurence_with_data(self, data):
+        visits = []
+
+        for single_visit_data in data:
+            # single_visit_data[2] is concept_id for 'inpatient visit (9201), which is obvious when building an object for ICUVisit
+
+            site = CareSite.get_site_by_name(self.care_sites, single_visit_data[9])
+
+            visit = ICUVisit(
+                visit_id=single_visit_data[0],
+                person_id=single_visit_data[1],
+                start_date=single_visit_data[3],
+                start_time=single_visit_data[4],
+                end_date=single_visit_data[5],
+                end_time=single_visit_data[6],
+                care_site=site
+            )
+            visits.append(visit)
+        return visits
+
+
+    def get_all_visit_occurence(self):
+        data = self.get_all_visit_occurence_raw()
+        return self.get_visit_occurence_with_data(data)
+
+
+class AskEcho:
+    echo = None
+
+    def __init__(self, echo):
+        self.echo = echo
+
+    def if_died_during_the_visit(self):
+        if (self.echo.focus == None or self.echo.focus.target == None):
+            if (self.echo.talking == True):
+                print ('\nEcho: "You said you want to know whether a patient died? but.... which patient(s)?"')
+            return None
+
+        if (self.echo.focus.type == SINGLE_VISIT):
+            visit = self.echo.focus.target
+            subject_id = visit.person_id
+
+            data = self.echo.excuteSQL("SELECT * from ohdsi.death WHERE person_id = " + str(subject_id))
+            if (len(data) == 0):
+                if (self.echo.talking == True):
+                    print ('\nEcho: "We have no record that the patient died in the hospital."\n')
+                return (False, dict())
+
+            else:
+                death_date = data[0][1]
+                visit_start_date = visit.start_date
+                visit_end_date = visit.end_date
+
+                if (visit_start_date <= death_date and death_date <= visit_end_date):
+                    if (self.echo.talking == True):
+                        print (
+                        '\nEcho: "We have a record that the patient died in the hospital during the visit. The patient died on ' + str(
+                            death_date) + ', which is between ' + str(visit_start_date) + ' and ' + str(
+                            visit_end_date) + ' (the duration of the target ICU visit.)\n')
+                    return (True, dict(death_date=death_date))
+                else:
+                    if (self.echo.talking == True):
+                        print (
+                            '\nEcho: "We have a record that the patient died in the hospital, but it was not during the visit. The patient died on ' + str(
+                                death_date) + ', which IS NOT between ' + str(visit_start_date) + ' and ' + str(
+                                visit_end_date) + ' (the duration of the target ICU visit.)\n')
+                    return (False, dict(death_date=death_date))
+
+        return None
+
+
+    def if_died_focused_period(self):
+        if (self.echo.focus.type == SINGLE_VISIT):
+            visit = self.echo.focus.target
+            subject_id = visit.person_id
+
+            data = self.echo.excuteSQL("SELECT * from ohdsi.death WHERE person_id = " + str(subject_id))
+            if (len(data) == 0):
+                if (self.echo.talking == True):
+                    print ('\nEcho: "We have no record that the patient died in the hospital."\n')
+            else:
+                death_date = data[0][1]
+                death_datetime = datetime(year=death_date.year, day=death_date.day, month=death_date.month)
+                start_datetime = self.echo.focus.start_datetime
+                end_datetime = self.echo.focus.end_datetime
+
+                if (start_datetime <= death_datetime and death_datetime <= end_datetime):
+                    if (self.echo.talking == True):
+                        print (
+                            '\nEcho: "We have a record that the patient died in the hospital during the period as the patient died on ' + str(
+                                death_date) + ', which is between ' + str(start_datetime) + ' and ' + str(
+                                end_datetime) + '.\n')
+                    return (True, dict(death_date=death_date))
+                else:
+                    if (self.echo.talking == True):
+                        print (
+                        '\nEcho: "We have a record that the patient died in the hospital, but it was not during the period specified. The patient died on ' + str(
+                            death_date) + ', which IS NOT between ' + str(start_datetime) + ' and ' + str(
+                            end_datetime) + '.\n')
+                    return (False, dict(death_date=death_date))
 
 
 class Loader:
