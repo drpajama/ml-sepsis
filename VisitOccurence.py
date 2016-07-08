@@ -1,4 +1,4 @@
-from datetime import datetime
+'''from datetime import datetime
 
 class ICUVisit:
 
@@ -35,3 +35,4 @@ class ICUVisit:
         print("Patient ID: " + str(self.person_id) )
         print("CareSite: " + self.care_site.description() )
         print("Duration: stayed in the ICU starting from " + str(self.get_start_datetime()) + " until " + str(self.get_end_datetime())  + " (Total: " + str(self.get_duration_datetime()) + " )" )
+        '''

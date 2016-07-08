@@ -1,12 +1,14 @@
 
 import psycopg2
-from VisitOccurence import ICUVisit
+from ClinicalData import Person
+from ClinicalData import ICUVisit
+from ClinicalData import LabValue
 import CareSite
 from datetime import timedelta
 from datetime import datetime
 from datetime import date
 
-SINGLE_VISIT, VISIT, PATIENTS, VISITS = range(4)
+SINGLE_VISIT, VISIT, SINGLE_PATIENT, PATIENTS, VISITS = range(5)
 
 class Echo:
 
@@ -18,12 +20,14 @@ class Echo:
     cursors_interested = None
     db_connect = None
 
+    cohorts = []
+
     ask = None
     gather = None
 
     def __init__ (self, db_connect):
         self.db_connect = db_connect
-        self.focus = Focus()
+        self.focus = Focus(self)
         self.ask = AskEcho(self)
         self.gather = GatherEcho(self)
 
@@ -37,6 +41,11 @@ class Echo:
             print("\n-------")
             print('"You: Hello Echo!"')
             print('"Echo: Hello Echo!"\n')
+
+    def say(self, what_to_say):
+
+        if (self.talking == True):
+            print(what_to_say)
 
     def shutup(self):
         print('Echo: Okay. No more talking.')
@@ -54,76 +63,15 @@ class Echo:
     def set_focus(self, target):
         self.focus.set_focus(target)
 
-    def ask_if_patient_died_focused_period(self):
-        if (self.focus.type == SINGLE_VISIT):
-            visit = self.focus.target
-            subject_id = visit.person_id
-
-            data = self.excuteSQL("SELECT * from ohdsi.death WHERE person_id = " + str(subject_id))
-            if (len(data) == 0):
-                if (self.talking == True):
-                    print ('\nEcho: "We have no record that the patient died in the hospital."\n')
-            else:
-                death_date = data[0][1]
-                death_datetime = datetime(year=death_date.year, day=death_date.day, month=death_date.month )
-                start_datetime = self.focus.start_datetime
-                end_datetime = self.focus.end_datetime
-
-                if (start_datetime <= death_datetime and death_datetime <= end_datetime):
-                    if (self.talking == True):
-                        print (
-                    '\nEcho: "We have a record that the patient died in the hospital during the period as the patient died on ' + str(
-                        death_date) + ', which is between ' + str(start_datetime) + ' and ' + str(
-                        end_datetime) + '.\n')
-                    return (True, dict(death_date=death_date))
-                else:
-                    if (self.talking == True):
-                        print ('\nEcho: "We have a record that the patient died in the hospital, but it was not during the period specified. The patient died on ' + str(
-                            death_date) + ', which IS NOT between ' + str(start_datetime) + ' and ' + str(
-                        end_datetime) + '.\n')
-                    return (False, dict(death_date=death_date))
-
-
-    def ask_if_patient_died_during_the_visit(self):
-        if (self.focus == None or self.focus.target == None):
-            if (self.talking == True):
-                print ('\nEcho: "You said you want to know whether a patient died? but.... which patient(s)?"')
-            return None
-
-        if (self.focus.type == SINGLE_VISIT):
-            visit = self.focus.target
-            subject_id = visit.person_id
-
-            data = self.excuteSQL("SELECT * from ohdsi.death WHERE person_id = " + str(subject_id))
-            if ( len(data) == 0 ):
-                if (self.talking == True):
-                    print ('\nEcho: "We have no record that the patient died in the hospital."\n')
-                return (False, dict())
-
-            else:
-                death_date = data[0][1]
-                visit_start_date = visit.start_date
-                visit_end_date = visit.end_date
-
-                if ( visit_start_date <= death_date and death_date <= visit_end_date  ):
-                    if (self.talking == True):
-                        print ('\nEcho: "We have a record that the patient died in the hospital during the visit. The patient died on ' + str(death_date) + ', which is between ' + str(visit_start_date) + ' and ' + str(visit_end_date) + ' (the duration of the target ICU visit.)\n')
-                    return (True, dict(death_date=death_date))
-                else:
-                    if (self.talking == True):
-                        print (
-                    '\nEcho: "We have a record that the patient died in the hospital, but it was not during the visit. The patient died on ' + str(
-                        death_date) + ', which IS NOT between ' + str(visit_start_date) + ' and ' + str(
-                        visit_end_date) + ' (the duration of the target ICU visit.)\n')
-                    return (False, dict(death_date=death_date))
-
-
-        return None
+    def add_current_focus_into_cohort(self):
+        self.cohorts.append(self.focus)
+        return
 
 
 class Focus:
-
+    patient = None
     visit = None
+
     type = None
     time_point = None
     duration = None
@@ -131,8 +79,10 @@ class Focus:
     end_datetime = None
     target = None
     talking = True
+    echo = None
 
-    def __init__(self):
+    def __init__(self, echo):
+        self.echo = echo
         return
 
     def set_focus(self, target):
@@ -146,9 +96,13 @@ class Focus:
 
         if ( isinstance(target, ICUVisit) ):
             self.type = SINGLE_VISIT
-            if (self.talking == True):
-                print('\nEcho: "Okay, I will focus on the visit of the patient_id: ' + str(target.person_id) + ', who visited ICU on ' + str(target.start_date) + '."\n')
+            self.echo.say('\nEcho: "Okay, I will focus on the visit of the patient_id: ' + str(target.person_id) + ', who visited ICU on ' + str(target.start_date) + '."\n')
+            self.visit = target
+            self.patient = target.get_person()
 
+        if( isinstance(target, Person)):
+            self.type = SINGLE_PATIENT
+            self.patient = target
 
     def set_time_point(self, timepoint, duration = timedelta(hours=3) ):
 
@@ -161,8 +115,7 @@ class Focus:
         self.start_datetime = self.time_point - duration
         self.end_datetime = self.time_point + duration
 
-        if (self.talking == True):
-            print('Echo: "I understand that you are intrested in what happend at ' + str(self.time_point) + " during the hospitalization. (plus/minus " + str(self.duration) + " hours) Therefore, it will be between " + str(self.start_datetime) + " and " + str(self.end_datetime) + ". ")
+        self.echo.say('Echo: "I understand that you are intrested in what happend at ' + str(self.time_point) + " during the hospitalization. (plus/minus " + str(self.duration) + " hours) Therefore, it will be between " + str(self.start_datetime) + " and " + str(self.end_datetime) + ". ")
 
 
     def set_date_point(self, datepoint, duration = timedelta(hours=24)):
@@ -170,15 +123,14 @@ class Focus:
         self.duration = duration
         self.end_datetime = self.start_datetime + duration
 
-        if (self.talking == True):
-            print('Echo: "I understand that you are intrested in what happend at ' + str(self.start_datetime) + " during the hospitalization. (will assume " + str(self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(self.end_datetime) + ".")
+        self.echo.say('Echo: "I understand that you are intrested in what happend at ' + str(self.start_datetime) + " during the hospitalization. (will assume " + str(self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(self.end_datetime) + ".")
 
     def set_start_end_datetime(self, start_datetime, end_datetime):
         self.start_datetime = start_datetime
         self.end_datetime = end_datetime
         self.duration = end_datetime - start_datetime
-        if (self.talking == True):
-            print('Echo: "I understand that you are intrested in what happend at ' + str(
+
+        self.echo.say('Echo: "I understand that you are intrested in what happend at ' + str(
             self.start_datetime) + " during the hospitalization. (will be " + str(
             self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(
             self.end_datetime) + ".")
@@ -203,16 +155,16 @@ class Focus:
 
     def days_later(self, days):
         self.time_forward(  timedelta( days = days)  )
-        if (self.talking == True):
-            print('Echo: "I understand that now you are intrested in what happend at ' + str(
+
+        self.echo.say('Echo: "I understand that now you are intrested in what happend at ' + str(
             self.start_datetime) + " during the hospitalization. (will be " + str(
             self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(
             self.end_datetime) + ".")
 
     def hours_later(self, hours):
         self.time_forward(timedelta(hours=hours))
-        if (self.talking == True):
-            print('Echo: "I understand that now you are intrested in what happend at ' + str(
+
+        self.echo.say('Echo: "I understand that now you are intrested in what happend at ' + str(
             self.start_datetime) + " during the hospitalization. (will be " + str(
             self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(
             self.end_datetime) + ".")
@@ -249,12 +201,72 @@ class GatherEcho:
         self.echo = echo
         self.care_sites = self.get_caresites()
 
+    def get_measurement_by_concept_raw(self, concept_id):
+        data =  self.echo.excuteSQL("SELECT * from ohdsi.measurement WHERE measurement_concept_id=" + str(concept_id) + ' and person_id=' + str(self.echo.focus.patient.person_id) )
+        return data
+
+
+    def get_measurement_by_concept_focused(self, concept_id):
+        return None
+
+    def get_measurement_by_concept_unfocused(self, concept_id):
+
+
+        data = self.get_measurement_by_concept_raw(concept_id)
+        labs = []
+
+
+        self.echo.say('Echo: "Okay. Let me give you the list of labs. It looks like we have ' + str(len(data)) + " labs.\n\n------------------------------- Labs -----------------------------")
+
+        for single_data in data:
+
+            is_ICU = False
+            date = single_data[2]
+            time = datetime.strptime(single_data[3], '%H:%M:%S')
+
+            timepoint = datetime(year=date.year, month=date.month, day=date.day, hour=time.hour, minute=time.minute, second=time.second)
+
+            if single_data[4] == 45877824:
+                is_ICU = True
+
+
+            lab = LabValue(
+                name = single_data[13],
+                concept_id = single_data[1],
+                person_id = single_data[0],
+                visit_id = single_data[12],
+                is_ICU = is_ICU,
+                timepoint = timepoint,
+                value = single_data[6],
+                operator_id = single_data[5],
+                unit_id = single_data[8],
+                unit_name = single_data[15]
+                )
+
+            labs.append( lab )
+
+
+        return labs
+
     def get_random_visits(self, number = 1):
         data = self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE random () < 0.01 LIMIT " + str(number))
         return self.get_visit_occurence_with_data(data)
 
+    def get_person_by_id(self, id):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.person WHERE person_id=" + str(id) )
+        if len(data) == 0:
+            return None
+
+        return (self.get_person_with_data(data))[0]
+
+
+    def get_random_people_raw(self, number = 1):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.person WHERE random () < 0.01 LIMIT " + str(number))
+        return data
+
     def get_caresites_raw(self):
         return self.echo.excuteSQL("SELECT * from ohdsi.care_site")
+
 
     def get_caresites(self):
         if (self.care_sites != None):
@@ -281,7 +293,20 @@ class GatherEcho:
     def get_all_visit_occurence_raw(self):
         return self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence")
 
+    def get_person_with_data(self, data):
+        persons = []
 
+        for single_patient_data in data:
+
+            person = Person(person_id=single_patient_data[0],
+                            gender_id=single_patient_data[1],
+                            year_of_birth=single_patient_data[2],
+                            month_of_birth=single_patient_data[3],
+                            day_of_birth=single_patient_data[4],
+                            echo=self.echo  )
+            persons.append(person)
+
+        return persons
 
     def get_visit_occurence_with_data(self, data):
         visits = []
@@ -298,7 +323,8 @@ class GatherEcho:
                 start_time=single_visit_data[4],
                 end_date=single_visit_data[5],
                 end_time=single_visit_data[6],
-                care_site=site
+                care_site=site,
+                echo = self.echo
             )
             visits.append(visit)
         return visits
@@ -317,8 +343,8 @@ class AskEcho:
 
     def if_died_during_the_visit(self):
         if (self.echo.focus == None or self.echo.focus.target == None):
-            if (self.echo.talking == True):
-                print ('\nEcho: "You said you want to know whether a patient died? but.... which patient(s)?"')
+
+            self.echo.say ('\nEcho: "You said you want to know whether a patient died? but.... which patient(s)?"')
             return None
 
         if (self.echo.focus.type == SINGLE_VISIT):
@@ -327,8 +353,8 @@ class AskEcho:
 
             data = self.echo.excuteSQL("SELECT * from ohdsi.death WHERE person_id = " + str(subject_id))
             if (len(data) == 0):
-                if (self.echo.talking == True):
-                    print ('\nEcho: "We have no record that the patient died in the hospital."\n')
+
+                self.echo.say ('\nEcho: "We have no record that the patient died in the hospital."\n')
                 return (False, dict())
 
             else:
@@ -337,15 +363,14 @@ class AskEcho:
                 visit_end_date = visit.end_date
 
                 if (visit_start_date <= death_date and death_date <= visit_end_date):
-                    if (self.echo.talking == True):
-                        print (
+
+                    self.echo.say (
                         '\nEcho: "We have a record that the patient died in the hospital during the visit. The patient died on ' + str(
                             death_date) + ', which is between ' + str(visit_start_date) + ' and ' + str(
                             visit_end_date) + ' (the duration of the target ICU visit.)\n')
                     return (True, dict(death_date=death_date))
                 else:
-                    if (self.echo.talking == True):
-                        print (
+                    self.echo.say (
                             '\nEcho: "We have a record that the patient died in the hospital, but it was not during the visit. The patient died on ' + str(
                                 death_date) + ', which IS NOT between ' + str(visit_start_date) + ' and ' + str(
                                 visit_end_date) + ' (the duration of the target ICU visit.)\n')
@@ -355,14 +380,18 @@ class AskEcho:
 
 
     def if_died_focused_period(self):
+
+        if (self.echo.focus.start_datetime == None):
+            self.echo.say('\nEcho: "I am not sure what you are talking about...... I think you forgot specifiying the time period."\n')
+            return None
+
         if (self.echo.focus.type == SINGLE_VISIT):
             visit = self.echo.focus.target
             subject_id = visit.person_id
 
             data = self.echo.excuteSQL("SELECT * from ohdsi.death WHERE person_id = " + str(subject_id))
             if (len(data) == 0):
-                if (self.echo.talking == True):
-                    print ('\nEcho: "We have no record that the patient died in the hospital."\n')
+                self.echo.say ('\nEcho: "We have no record that the patient died in the hospital."\n')
             else:
                 death_date = data[0][1]
                 death_datetime = datetime(year=death_date.year, day=death_date.day, month=death_date.month)
@@ -370,15 +399,13 @@ class AskEcho:
                 end_datetime = self.echo.focus.end_datetime
 
                 if (start_datetime <= death_datetime and death_datetime <= end_datetime):
-                    if (self.echo.talking == True):
-                        print (
+                    self.echo.say (
                             '\nEcho: "We have a record that the patient died in the hospital during the period as the patient died on ' + str(
                                 death_date) + ', which is between ' + str(start_datetime) + ' and ' + str(
                                 end_datetime) + '.\n')
                     return (True, dict(death_date=death_date))
                 else:
-                    if (self.echo.talking == True):
-                        print (
+                    self.echo.say (
                         '\nEcho: "We have a record that the patient died in the hospital, but it was not during the period specified. The patient died on ' + str(
                             death_date) + ', which IS NOT between ' + str(start_datetime) + ' and ' + str(
                             end_datetime) + '.\n')
