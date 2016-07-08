@@ -125,10 +125,38 @@ class Focus:
 
         self.echo.say('Echo: "I understand that you are intrested in what happend at ' + str(self.start_datetime) + " during the hospitalization. (will assume " + str(self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(self.end_datetime) + ".")
 
+    def set_start_datetime(self, start_datetime):
+        # when you want to reset start_time
+
+        self.start_datetime = start_datetime
+        if (self.end_datetime != None):
+            self.duration = self.end_datetime - start_datetime
+
+        self.echo.say('Echo: "I understand that you are intrested in what happend at ' + str(
+            self.start_datetime) + " during the hospitalization. (will be " + str(
+            self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(
+            self.end_datetime) + ".")
+
+        return
+
+    def set_end_datetime(self, end_datetime):
+        # when you want to reset end_time
+
+        self.end_datetime = end_datetime
+        if (self.start_datetime != None):
+            self.duration = end_datetime - self.start_datetime
+
+        self.echo.say('Echo: "I understand that you are intrested in what happend at ' + str(
+            self.start_datetime) + " during the hospitalization. (will be " + str(
+            self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(
+            self.end_datetime) + ".")
+
+        return
+
     def set_start_end_datetime(self, start_datetime, end_datetime):
         self.start_datetime = start_datetime
         self.end_datetime = end_datetime
-        self.duration = end_datetime - start_datetime
+
 
         self.echo.say('Echo: "I understand that you are intrested in what happend at ' + str(
             self.start_datetime) + " during the hospitalization. (will be " + str(
@@ -153,6 +181,10 @@ class Focus:
         if (self.time_point != None):
             self.time_point = self.time_point + duration
 
+    def start_hours_earlier(self, hours):
+        hours_datetime = timedelta(hours = hours)
+        self.set_start_datetime( self.start_datetime-hours_datetime )
+
     def days_later(self, days):
         self.time_forward(  timedelta( days = days)  )
 
@@ -168,6 +200,16 @@ class Focus:
             self.start_datetime) + " during the hospitalization. (will be " + str(
             self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(
             self.end_datetime) + ".")
+
+    def if_fall_into(self, datetime_point ):
+
+        if ( self.start_datetime == None or self.end_datetime == None):
+            return None
+
+        if ( datetime_point >= self.start_datetime and datetime_point <= self.end_datetime ):
+            return True
+        else:
+            return False
 
 
 '''
@@ -207,7 +249,18 @@ class GatherEcho:
 
 
     def get_measurement_by_concept_focused(self, concept_id):
-        return None
+        if self.echo.focus == None:
+            return
+
+        labs = self.get_measurement_by_concept_unfocused(concept_id)
+        labs_met = []
+
+        for lab in labs:
+            if( self.echo.focus.if_fall_into( lab.timepoint ) == True):
+                labs_met.append( lab )
+
+
+        return labs_met
 
     def get_measurement_by_concept_unfocused(self, concept_id):
 
@@ -216,7 +269,7 @@ class GatherEcho:
         labs = []
 
 
-        self.echo.say('Echo: "Okay. Let me give you the list of labs. It looks like we have ' + str(len(data)) + " labs.\n\n------------------------------- Labs -----------------------------")
+       # self.echo.say('Echo: "Okay. Let me give you the list of labs. It looks like we have ' + str(len(data)) + " labs.\n\n------------------------------- Labs -----------------------------")
 
         for single_data in data:
 
