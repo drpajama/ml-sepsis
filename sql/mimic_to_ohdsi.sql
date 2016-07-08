@@ -27,9 +27,6 @@ SELECT subject_id,
 0,0, sex
 FROM mimic2v26.d_patients;
 
-
-
-
 -- CareSite
 
 /* MIMIC3 data was collected in Beth Israel Deaconess Hospital and these
