@@ -1,4 +1,6 @@
 
+# Abstracted Clinical Data in Class Structures
+
 from datetime import datetime
 
 class Person:
@@ -32,6 +34,9 @@ class Person:
         if (self.gender_id == 8537):
             return True
         return False
+
+    def __repr__(self):
+        return  "Patient ID: " + str(self.person_id) + "\nGender_ID: " + str(self.gender_id) + " (You can use the methods of 'is_male()' and 'is_female()')"  + "\nDate of Birth: " + str(self.dob)
 
     def description(self):
         print("Patient ID: " + str(self.person_id) )
@@ -74,12 +79,11 @@ class ICUVisit:
     def get_person(self):
         return self.echo.gather.get_person_by_id( self.person_id )
 
+    def __repr__(self):
+        return "\n" + "Visit ID: " + str(self.visit_id) + "\nPatient ID: " + str(self.person_id) + "\nCareSite: " + self.care_site.description() + "Duration: stayed in the ICU starting from " + str(self.get_start_datetime()) + " until " + str(self.get_end_datetime())  + " (Total: " + str(self.get_duration_datetime()) + " )"
+
     def description(self):
-        print("")
-        print("Visit ID: " + str(self.visit_id) )
-        print("Patient ID: " + str(self.person_id) )
-        print("CareSite: " + self.care_site.description() )
-        print("Duration: stayed in the ICU starting from " + str(self.get_start_datetime()) + " until " + str(self.get_end_datetime())  + " (Total: " + str(self.get_duration_datetime()) + " )" )
+        print(self.__repr__(self))
 
 class LabValue:
     name = None
@@ -106,13 +110,12 @@ class LabValue:
         self.unit_name = unit_name
         self.concept_id = concept_id
 
-    def description(self):
+    def __repr__(self):
 
         tag = " - Non-ICU"
         if self.is_ICU == True:
             tag = ""
-
-        print( self.name + "/" + str(self.concept_id) + ": " + str(self.value) + str(self.unit_name) +  " (Done at " + str(self.timepoint) + ")" + tag )
+        return self.name + "/" + str(self.concept_id) + ": " + str(self.value) + str(self.unit_name) +  " (Done at " + str(self.timepoint) + ")" + tag
 
 class VentilatorSetting:
     person_id = None
@@ -120,6 +123,19 @@ class VentilatorSetting:
 
     def __init__(self):
         return
+
+
+class MechanialVentliationStatus:
+    person_id = None
+    visit_id = None
+    setting = None
+    time_point = None
+
+
+    def set_setting ( self ):
+        self.setting = VentilatorSetting
+
+
 
 class IVFluidSetting:
     def __init__(self):
@@ -132,5 +148,7 @@ class CareSite:
         self.site_concept_id = site_concept_id
         self.site_source_value = site_source_value
 
-    def description(self):
+
+    def __repr__(self):
         return self.site_name + " (Concept ID: " + str(self.site_concept_id) + " / " + self.site_source_value + ")"
+
