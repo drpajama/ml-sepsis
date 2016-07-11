@@ -96,7 +96,7 @@ class Focus:
 
         if ( isinstance(target, ICUVisit) ):
             self.type = SINGLE_VISIT
-            self.echo.say('\nEcho: "Okay, I will focus on the visit of the patient_id: ' + str(target.person_id) + ', who visited ICU on ' + str(target.start_date) + '."\n')
+            #self.echo.say('\nEcho: "Okay, I will focus on the visit of the patient_id: ' + str(target.person_id) + ', who visited ICU on ' + str(target.start_date) + '."\n')
             self.visit = target
             self.patient = target.get_person()
 
@@ -104,7 +104,7 @@ class Focus:
             self.type = SINGLE_PATIENT
             self.patient = target
 
-    def set_time_point(self, timepoint, duration = timedelta(hours=3) ):
+    def set_time_point(self, timepoint, duration = timedelta(hours=4) ):
 
         self.duration = duration
         if ( isinstance(timepoint, datetime) ):
@@ -243,10 +243,26 @@ class GatherEcho:
         self.echo = echo
         self.care_sites = self.get_caresites()
 
+    def get_all_measurements_raw(self):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.measurement WHERE person_id=" + str(self.echo.focus.patient.person_id) )
+        return data
+
     def get_measurement_by_concept_raw(self, concept_id):
         data =  self.echo.excuteSQL("SELECT * from ohdsi.measurement WHERE measurement_concept_id=" + str(concept_id) + ' and person_id=' + str(self.echo.focus.patient.person_id) )
         return data
 
+    def get_all_measurements_focused (self):
+        if self.echo.focus == None:
+            return None
+
+        measurements = self.get_all_measurements_unfocused()
+        measurements_met = []
+
+        for measurement in measurements:
+            if (self.echo.focus.if_fall_into(measurement.timepoint) == True):
+                measurements_met.append(measurement)
+
+        return measurements_met
 
     def get_measurement_by_concept_focused(self, concept_id):
         if self.echo.focus == None:
@@ -259,8 +275,44 @@ class GatherEcho:
             if( self.echo.focus.if_fall_into( lab.timepoint ) == True):
                 labs_met.append( lab )
 
-
         return labs_met
+
+    def get_all_measurements_unfocused(self):
+
+        data = self.get_all_measurements_raw()
+        measures_processed = []
+
+        for single_data in data:
+
+            is_ICU = False
+            date = single_data[2]
+            time = datetime.strptime(single_data[3], '%H:%M:%S')
+
+            timepoint = datetime(year=date.year, month=date.month, day=date.day, hour=time.hour, minute=time.minute, second=time.second)
+
+            if single_data[4] == 45877824:
+                is_ICU = True
+
+
+            lab = LabValue(
+                name = single_data[13],
+                concept_id = single_data[1],
+                person_id = single_data[0],
+                visit_id = single_data[12],
+                is_ICU = is_ICU,
+                timepoint = timepoint,
+                value = single_data[6],
+                operator_id = single_data[5],
+                unit_id = single_data[8],
+                unit_name = single_data[15],
+                value_id=single_data[7],
+                value_str = single_data[16]
+                )
+
+            measures_processed.append( lab )
+
+
+        return measures_processed
 
     def get_measurement_by_concept_unfocused(self, concept_id):
 
@@ -305,6 +357,13 @@ class GatherEcho:
         data = self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE random () < 0.01 LIMIT " + str(number))
         return self.get_visit_occurence_with_data(data)
 
+    def get_visit_by_id(self, id):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE visit_occurrence_id=" + str(id))
+        if len(data) == 0:
+            return None
+
+        return (self.get_visit_occurence_with_data(data))[0]
+
     def get_person_by_id(self, id):
         data = self.echo.excuteSQL("SELECT * from ohdsi.person WHERE person_id=" + str(id) )
         if len(data) == 0:
@@ -316,6 +375,17 @@ class GatherEcho:
     def get_random_people_raw(self, number = 1):
         data = self.echo.excuteSQL("SELECT * from ohdsi.person WHERE random () < 0.01 LIMIT " + str(number))
         return data
+
+    def get_all_visit_id(self):
+        data = self.echo.excuteSQL("SELECT visit_occurrence_id from ohdsi.visit_occurrence")
+
+        id_list = []
+
+        for single_data in data:
+            id_list.append( single_data[0] )
+
+        return id_list
+
 
     def get_caresites_raw(self):
         return self.echo.excuteSQL("SELECT * from ohdsi.care_site")
@@ -342,6 +412,13 @@ class GatherEcho:
         self.care_sites = sites
         return sites
 
+    def get_visit_by_index(self, index):
+        raw = self.get_visit_by_index_raw(index)
+        visits = self.get_visit_occurence_with_data(raw)
+        return visits[0]
+
+    def get_visit_by_index_raw(self, index):
+        return self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE row_number() = " + str(index+1) )
 
     def get_all_visit_occurence_raw(self):
         return self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence")
@@ -393,6 +470,22 @@ class AskEcho:
 
     def __init__(self, echo):
         self.echo = echo
+
+    def summarize_day(self, datepoint) :
+
+        self.echo.focus.start_datetime = datetime(year=datepoint.year, month=datepoint.month, day=datepoint.day, hour=0,
+                                           minute=0, second=0)
+        self.echo.focus.duration = timedelta(hours=24)
+        self.echo.focus.end_datetime = self.echo.focus.start_datetime + self.echo.focus.duration
+
+        measurements = self.get_measurement_by_concept_focused()
+
+        return measurements
+
+    def how_many_total_visits(self):
+
+        data = self.echo.excuteSQL("SELECT COUNT(*) from ohdsi.visit_occurrence")
+        return data[0][0]
 
     def if_died_during_the_visit(self):
         if (self.echo.focus == None or self.echo.focus.target == None):
@@ -483,8 +576,6 @@ class Loader:
 
     def get_connection(self):
         return self.conn
-
-
 
 
 '''

@@ -1,4 +1,109 @@
 
+import datetime
+
+class CohortBuilder:
+    echo = None
+    index = 0
+
+    inclusion_filters = []
+    exclusion_filters = []
+
+    def check_for_visit ( self, visit ):
+
+        inclusion_failed = 0
+
+        for filter in self.inclusion_filters:
+            if filter.if_patient_meet_filter(visit, self.echo) == False:
+                inclusion_failed = inclusion_failed + 1
+
+        if inclusion_failed == 0:
+            return True
+        else:
+            return False
+
+
+    def get_cohort_visit_list(self):
+
+        number_of_visits = self.echo.ask.how_many_total_visits()
+        count_of_cycles = number_of_visits / 100
+        left_after_cycles = number_of_visits % 100
+        all_visit_id = self.echo.gather.get_all_visit_id()
+        id_list = []
+
+        i = 1
+        print( count_of_cycles )
+        for x in range(0, count_of_cycles):
+            for j in range(0, 100):
+                visit = self.echo.gather.get_visit_by_id(all_visit_id[i])
+                if ( self.check_for_visit(visit) == True ):
+                    id_list.append( i )
+                i = i + 1
+
+        for x in range(0, left_after_cycles-1):
+            visit = self.echo.gather.get_visit_by_id ( all_visit_id[i] )
+            if (self.check_for_visit(visit) == True):
+                id_list.append(i)
+            i = i + 1
+
+
+
+        return number_of_visits
+
+
+    def set_inclusion_filters(self, filters):
+        self.inclusion_filters = filters
+
+    def set_exclusion_filters(self, filters):
+        self.exclusion_filters = filters
+
+
+
+class EventCohortBuilder(CohortBuilder):
+
+    type = None
+
+    def __init__(self, echo):
+        self.echo = echo
+        return
+
+    def set_event_type(self, type):
+        self.type = type
+
+    def next(self):
+        return
+
+    def set_inclusion_filters(self, filters):
+        self.inclusion_filters = filters
+
+    def build(self):
+
+        tuple_array = []
+        visit_index = 0
+
+        number_of_visits = self.echo.ask.how_many_total_visits()
+
+        for visit_index in range( 0, number_of_visits-1 ):
+            visit = self.echo.gather.get_visit_by_index ( visit_index )
+            print (visit)
+
+        if (type == 'daily_morning'):
+            self.echo.set_focus( visit )
+            self.echo.focus.set_time_point(visit.get_start_datetime(), duration=datetime.timedelta(hours=4))
+
+
+
+
+
+
+
+class VisitCohortBuilder(CohortBuilder):
+
+    def __init__(self, echo):
+        self.echo = echo
+        return
+
+
+
 class Filter(object):
     echo = None
 
@@ -6,7 +111,11 @@ class Filter(object):
         self.echo = echo
         return
 
-class AntibioticsAdministrationFilter (Filter):
+#class ConceptFilter (Filter):
+
+
+
+#class AntibioticsAdministrationFilter (Filter):
 
 
 
@@ -15,8 +124,6 @@ class AntibioticsAdministrationFilter (Filter):
 
 
 class SignificantInfectionFilter (Filter):
-
-
 
     def process_visit( self, visit ):
         # returns tuple of (Bool, {dict/detail} )

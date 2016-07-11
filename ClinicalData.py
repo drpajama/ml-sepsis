@@ -2,6 +2,7 @@
 # Abstracted Clinical Data in Class Structures
 
 from datetime import datetime
+from datetime import timedelta
 
 class Person:
     person_id = None
@@ -79,6 +80,13 @@ class ICUVisit:
     def get_person(self):
         return self.echo.gather.get_person_by_id( self.person_id )
 
+    def get_first_6am_datetime(self):
+        one_day_ago = datetime(year=self.start_date.year, month=self.start_date.month, day=(self.start_date.day),
+                        hour = 6, minute = 0, second = 0)
+        timimg = one_day_ago + timedelta(days=1)
+
+        return timimg
+
     def __repr__(self):
         return "\n" + "Visit ID: " + str(self.visit_id) + "\nPatient ID: " + str(self.person_id) + "\nCareSite: " + self.care_site.description() + "Duration: stayed in the ICU starting from " + str(self.get_start_datetime()) + " until " + str(self.get_end_datetime())  + " (Total: " + str(self.get_duration_datetime()) + " )"
 
@@ -97,8 +105,12 @@ class LabValue:
     is_ICU = None
     operator_id = None
 
+    value_str = None
+    value_id = None
 
-    def __init__(self, name , concept_id, person_id, visit_id, is_ICU, timepoint, value, operator_id, unit_id, unit_name):
+
+    def __init__(self, name , concept_id, person_id, visit_id, is_ICU, timepoint, value, operator_id, unit_id, unit_name,
+                 value_id = None, value_str = None):
         self.name = name
         self.person_id = person_id
         self.visit_id = visit_id
@@ -109,13 +121,21 @@ class LabValue:
         self.unit_id = unit_id
         self.unit_name = unit_name
         self.concept_id = concept_id
+        self.value_str = value_str
+        self.value_id = value_id
 
     def __repr__(self):
 
         tag = " - Non-ICU"
         if self.is_ICU == True:
             tag = ""
-        return self.name + "/" + str(self.concept_id) + ": " + str(self.value) + str(self.unit_name) +  " (Done at " + str(self.timepoint) + ")" + tag
+
+        if self.value == None:
+            return self.name + "/" + str(self.concept_id) + ": " + self.value_str + "(" + str(self.value_id)+ ")"  + " (Done at " + str(self.timepoint) + ")" + tag
+        else:
+            return self.name + "/" + str(self.concept_id) + ": " + str(self.value) + " "+ str(
+                self.unit_name) + " (Done at " + str(self.timepoint) + ")" + tag
+
 
 class VentilatorSetting:
     person_id = None
