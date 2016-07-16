@@ -3,6 +3,10 @@ import psycopg2
 from ClinicalData import Person
 from ClinicalData import ICUVisit
 from ClinicalData import LabValue
+from ClinicalData import DrugExposure
+from ClinicalData import ProcedureOccurrence
+from ClinicalData import DeviceExposure
+from OHDSIConstants import CONST
 import CareSite
 from datetime import timedelta
 from datetime import datetime
@@ -30,6 +34,10 @@ class Echo:
         self.focus = Focus(self)
         self.ask = AskEcho(self)
         self.gather = GatherEcho(self)
+
+    def copy(self):
+        echo = Echo(self.db_connect)
+        return echo
 
     def hello_echo(self):
 
@@ -62,6 +70,40 @@ class Echo:
 
     def set_focus(self, target):
         self.focus.set_focus(target)
+
+    def get_resident_progress_note(self):
+        data = self.excuteSQL("SELECT * FROM mimiciii.noteevents as n WHERE n.subject_id = " + str(self.focus.patient.person_id) + "  and n.description = 'Physician Resident Progress Note'")
+
+        temp = ""
+
+        for single in data:
+
+            date = single[3]
+            print(date)
+            if self.focus.if_fall_into_date( date ):
+                temp = str(single[3])
+                temp = temp + "\n"
+                temp = temp + single[6]
+                temp = temp + "\n"
+                temp = temp + single[7]
+                temp = temp + "\n"
+                temp = temp + single[10]
+                return temp
+
+        return ""
+
+
+    def get_discharge_summary(self):
+        data = self.excuteSQL("SELECT * FROM mimiciii.noteevents as n WHERE n.subject_id = " + str(self.focus.patient.person_id) + "  and n.category = 'Discharge summary'")
+        single = data[0]
+        temp = str(single[3])
+        temp = temp + "\n"
+        temp = temp + single[6]
+        temp = temp + "\n"
+        temp = temp + single[7]
+        temp = temp + "\n"
+        temp = temp + single[10]
+        return temp
 
     def add_current_focus_into_cohort(self):
         self.cohorts.append(self.focus)
@@ -96,7 +138,7 @@ class Focus:
 
         if ( isinstance(target, ICUVisit) ):
             self.type = SINGLE_VISIT
-            #self.echo.say('\nEcho: "Okay, I will focus on the visit of the patient_id: ' + str(target.person_id) + ', who visited ICU on ' + str(target.start_date) + '."\n')
+            self.echo.say('\nEcho: "Okay, I will focus on the visit of the patient_id: ' + str(target.person_id) + ', who visited ICU on ' + str(target.start_date) + '."\n')
             self.visit = target
             self.patient = target.get_person()
 
@@ -156,6 +198,7 @@ class Focus:
     def set_start_end_datetime(self, start_datetime, end_datetime):
         self.start_datetime = start_datetime
         self.end_datetime = end_datetime
+        self.duration = self.end_datetime - self.start_datetime
 
 
         self.echo.say('Echo: "I understand that you are intrested in what happend at ' + str(
@@ -201,14 +244,23 @@ class Focus:
             self.duration) + " period) Therefore, it will be between " + str(self.start_datetime) + " and " + str(
             self.end_datetime) + ".")
 
+    def if_fall_into_date(self, date):
+
+        if ( date.year == self.start_datetime.year and date.month == self.start_datetime.month and date.day == self.start_datetime.day) :
+            return True
+        return False
+
+
     def if_fall_into(self, datetime_point ):
 
         if ( self.start_datetime == None or self.end_datetime == None):
             return None
 
         if ( datetime_point >= self.start_datetime and datetime_point <= self.end_datetime ):
+           # print("true")
             return True
         else:
+           # print('false')
             return False
 
 
@@ -243,12 +295,138 @@ class GatherEcho:
         self.echo = echo
         self.care_sites = self.get_caresites()
 
+    def get_all_device_exposure_raw(self):
+        data = self.echo.excuteSQL(
+            "SELECT * from ohdsi.device_exposure WHERE person_id=" + str(self.echo.focus.patient.person_id))
+        return data
+
+    def get_all_device_exposure_unfocused(self):
+        data = self.get_all_device_exposure_raw()
+
+        devices_processed = []
+
+        for single_data in data:
+            start_date = single_data[2]
+            start_time = datetime.strptime(single_data[12], '%H:%M:%S')
+            end_date = single_data[3]
+            end_time = datetime.strptime(single_data[13], '%H:%M:%S')
+
+            start_datetime = datetime(year=start_date.year, month=start_date.month, day=start_date.day, hour=start_time.hour,
+                                          minute=start_time.minute, second=start_time.second)
+            end_datetime = datetime(year=end_date.year, month=end_date.month, day=end_date.day, hour=end_time.hour,
+                                      minute=end_time.minute, second=end_time.second)
+
+            device = DeviceExposure(
+                person_id=single_data[0],
+                device_concept_id=single_data[1],
+                device_type_concept_id=single_data[4],
+                start_time = start_datetime,
+                end_time=end_datetime,
+                name=single_data[9]
+            )
+
+            devices_processed.append(device)
+        return devices_processed
+
+
+
+    def get_all_procedure_occurrence_unfocused (self):
+         data = self.get_all_procedure_occurrence_raw ()
+
+         procedures_processed = []
+
+         for single_data in data:
+             date = single_data[3]
+             time = datetime.strptime(single_data[12], '%H:%M:%S')
+
+             procedure_datetime = datetime(year=date.year, month=date.month, day=date.day, hour=time.hour,
+                                       minute=time.minute, second=time.second)
+
+             procedure = ProcedureOccurrence(
+                 person_id=single_data[1],
+                 procedure_concept_id=single_data[2],
+                 procedure_type_id = single_data[4],
+                 procedure_time=procedure_datetime,
+                 name = single_data[9]
+             )
+
+             procedures_processed.append(procedure)
+         return procedures_processed
+
+
+    def get_all_drug_exposure_by_type_unfocused(self, type):
+
+        data = self.get_all_drug_exposure_by_type_raw( type )
+        exposures_processed = []
+
+        for single_data in data:
+
+            date = single_data[2]
+            time = single_data[20] #datetime.strptime(single_data[20], '%H:%M:%S')
+
+            end_date = single_data[3]
+            end_time = single_data[21] #datetime.strptime(single_data[21], '%H:%M:%S')
+
+            start_datetime = datetime(year=date.year, month=date.month, day=date.day, hour=time.hour, minute=time.minute, second=time.second)
+            end_datetime = datetime(year=end_date.year, month=end_date.month, day=end_date.day, hour=end_time.hour, minute=end_time.minute, second=end_time.second)
+
+            exposure = DrugExposure(
+                    person_id = single_data[0],
+                    drug_concept_id = single_data[1],
+                    drug_type_id = single_data[4],
+                    start_time = start_datetime,
+                    end_time = end_datetime,
+                    dose = single_data[11],
+                    dose_unit_id = single_data[12],
+                    route = single_data[10],
+                    name = single_data[16]
+            )
+
+            exposures_processed.append( exposure )
+
+        return exposures_processed
+
+
+    def get_all_drug_exposure_by_type_focused (self, type):
+        if self.echo.focus == None:
+            return
+
+        exposures = self.get_all_drug_exposure_by_type_unfocused(type)
+        exposures_met = []
+
+        for exposure in exposures:
+            if (self.echo.focus.if_fall_into(exposure.timepoint) == True):
+                exposures_met.append(exposure)
+
+        return exposures_met
+
+    def get_all_procedure_occurrence_raw (self):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.procedure_occurrence WHERE person_id=" + str(self.echo.focus.patient.person_id)  )
+        return data
+
+    def get_all_drug_exposure_by_type_raw(self, type):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.drug_exposure WHERE person_id=" + str(self.echo.focus.patient.person_id) + " and drug_type_concept_id = " + str(type) )
+        return data
+
+    def get_all_drug_exposure_raw(self):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.drug_exposure WHERE person_id=" + str(self.echo.focus.patient.person_id) )
+        return data
+
     def get_all_measurements_raw(self):
         data = self.echo.excuteSQL("SELECT * from ohdsi.measurement WHERE person_id=" + str(self.echo.focus.patient.person_id) )
         return data
 
-    def get_measurement_by_concept_raw(self, concept_id):
-        data =  self.echo.excuteSQL("SELECT * from ohdsi.measurement WHERE measurement_concept_id=" + str(concept_id) + ' and person_id=' + str(self.echo.focus.patient.person_id) )
+    def get_measurement_by_concept_raw(self, concept_id_array):
+
+        concept_id_list = concept_id_array
+
+        if isinstance(concept_id_list, list) == False:
+            concept_id_list = [concept_id_list]
+
+        data = []
+
+        for concept_id in concept_id_list:
+            data = data + self.echo.excuteSQL("SELECT * from ohdsi.measurement WHERE measurement_concept_id=" + str(concept_id) + ' and person_id=' + str(self.echo.focus.patient.person_id) )
         return data
 
     def get_all_measurements_focused (self):
@@ -259,16 +437,18 @@ class GatherEcho:
         measurements_met = []
 
         for measurement in measurements:
+
             if (self.echo.focus.if_fall_into(measurement.timepoint) == True):
+
                 measurements_met.append(measurement)
 
         return measurements_met
 
-    def get_measurement_by_concept_focused(self, concept_id):
+    def get_measurement_by_concept_focused(self, concept_id_array):
         if self.echo.focus == None:
             return
 
-        labs = self.get_measurement_by_concept_unfocused(concept_id)
+        labs = self.get_measurement_by_concept_unfocused(concept_id_array)
         labs_met = []
 
         for lab in labs:
@@ -298,7 +478,7 @@ class GatherEcho:
                 name = single_data[13],
                 concept_id = single_data[1],
                 person_id = single_data[0],
-                visit_id = single_data[12],
+                hadm_id = single_data[12],
                 is_ICU = is_ICU,
                 timepoint = timepoint,
                 value = single_data[6],
@@ -314,10 +494,10 @@ class GatherEcho:
 
         return measures_processed
 
-    def get_measurement_by_concept_unfocused(self, concept_id):
+    def get_measurement_by_concept_unfocused(self, concept_id_array):
 
 
-        data = self.get_measurement_by_concept_raw(concept_id)
+        data = self.get_measurement_by_concept_raw(concept_id_array)
         labs = []
 
 
@@ -339,7 +519,7 @@ class GatherEcho:
                 name = single_data[13],
                 concept_id = single_data[1],
                 person_id = single_data[0],
-                visit_id = single_data[12],
+                hadm_id = single_data[12],
                 is_ICU = is_ICU,
                 timepoint = timepoint,
                 value = single_data[6],
@@ -353,9 +533,15 @@ class GatherEcho:
 
         return labs
 
-    def get_random_visits(self, number = 1):
+    def get_random_icu_visits (self, number = 1 ):
+        data = self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence as visit WHERE random() < 0.01 and visit.visit_concept_id = " + str(CONST.ICU_ADMISSION) + " LIMIT "+ str(number))
+        return self.get_icu_visits_with_data(data)
+        print data
+
+    '''def get_random_visits(self, number = 1):
         data = self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE random () < 0.01 LIMIT " + str(number))
         return self.get_visit_occurence_with_data(data)
+    '''
 
     def get_visit_by_id(self, id):
         data = self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE visit_occurrence_id=" + str(id))
@@ -376,12 +562,15 @@ class GatherEcho:
         data = self.echo.excuteSQL("SELECT * from ohdsi.person WHERE random () < 0.01 LIMIT " + str(number))
         return data
 
-    def get_all_visit_id(self):
+
+    def get_all_ICU_visit_id(self):
         data = self.echo.excuteSQL("SELECT visit_occurrence_id from ohdsi.visit_occurrence")
 
         id_list = []
 
         for single_data in data:
+            print(single_data)
+            single_data[None]
             id_list.append( single_data[0] )
 
         return id_list
@@ -412,13 +601,14 @@ class GatherEcho:
         self.care_sites = sites
         return sites
 
-    def get_visit_by_index(self, index):
-        raw = self.get_visit_by_index_raw(index)
-        visits = self.get_visit_occurence_with_data(raw)
+    def get_icu_visit_by_index(self, index):
+        raw = self.get_icu_visit_by_index_raw(index)
+        visits = self.get_icu_visits_with_data(raw)
         return visits[0]
 
-    def get_visit_by_index_raw(self, index):
-        return self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence WHERE row_number() = " + str(index+1) )
+    def get_icu_visit_by_index_raw(self, index):
+        return self.echo.excuteSQL("SELECT * FROM (SELECT temp.*, row_number() OVER(ORDER BY temp.person_id) as index  FROM (SELECT * FROM ohdsi.visit_occurrence) as temp WHERE temp.visit_concept_id = " + str(CONST.ICU_ADMISSION) + ") as temp2 WHERE temp2.index = " + str(index+1) )
+
 
     def get_all_visit_occurence_raw(self):
         return self.echo.excuteSQL("SELECT * from ohdsi.visit_occurrence")
@@ -438,25 +628,27 @@ class GatherEcho:
 
         return persons
 
-    def get_visit_occurence_with_data(self, data):
+    def get_icu_visits_with_data(self, data):
         visits = []
 
         for single_visit_data in data:
             # single_visit_data[2] is concept_id for 'inpatient visit (9201), which is obvious when building an object for ICUVisit
 
             site = CareSite.get_site_by_name(self.care_sites, single_visit_data[9])
+            print (site)
 
             visit = ICUVisit(
-                visit_id=single_visit_data[0],
-                person_id=single_visit_data[1],
-                start_date=single_visit_data[3],
-                start_time=single_visit_data[4],
-                end_date=single_visit_data[5],
-                end_time=single_visit_data[6],
-                care_site=site,
+                icu_visit_id = single_visit_data[0],
+                person_id = single_visit_data[1],
+                start_date = single_visit_data[3],
+                start_time = single_visit_data[4],
+                end_date = single_visit_data[5],
+                end_time = single_visit_data[6],
+                care_site = site,
                 echo = self.echo
             )
             visits.append(visit)
+
         return visits
 
 
@@ -482,9 +674,9 @@ class AskEcho:
 
         return measurements
 
-    def how_many_total_visits(self):
+    def how_many_total_icu_visits(self):
 
-        data = self.echo.excuteSQL("SELECT COUNT(*) from ohdsi.visit_occurrence")
+        data = self.echo.excuteSQL("SELECT COUNT(*) from ohdsi.visit_occurrence where visit_concept_id = " + str(CONST.ICU_ADMISSION) )
         return data[0][0]
 
     def if_died_during_the_visit(self):

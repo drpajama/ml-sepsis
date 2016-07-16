@@ -8,18 +8,22 @@ from datetime import time
 
 from OHDSIConstants import CONST
 
-loader = EchoKit.Loader( dbname = "mimic2", user = "jpark", password = "pc386pc386" )
+loader = EchoKit.Loader( dbname = "mimic", user = "jpark", password = "pc386pc386" )
 
 echo = EchoKit.Echo( loader.get_connection() )
-#echo.shutup()
+
+
 echo.hello_echo()
 
-visits = echo.gather.get_random_visits(2)
+icu_visits = echo.gather.get_random_icu_visits(2)
 
-echo.set_focus( visits[0] )
+print( icu_visits[0])
+echo.shutup()
+
+echo.set_focus( icu_visits[0] )
+echo.focus.set_time_point( icu_visits[0].get_start_datetime(), duration = timedelta( hours = 4) )
 
 
-echo.focus.set_time_point( visits[0].get_start_datetime(), duration = timedelta( hours = 4) )
 measures = echo.gather.get_all_measurements_focused()
 
 print("\n\n---- Measurements on ICU Admission ------\n")
@@ -27,20 +31,13 @@ print("\n\n---- Measurements on ICU Admission ------\n")
 for measure in measures:
     print (measure)
 
+echo.focus.set_time_point( icu_visits[0].get_first_6am_datetime(), duration = timedelta(hours=4) )
 
-
-
-echo.focus.set_time_point( visits[0].get_first_6am_datetime(), duration = timedelta(hours=4) )
 measures = echo.gather.get_all_measurements_focused()
 
 print("\n\n---- Day 1 in the ICU ------\n\nBP trend -->\n")
 
-
-
-maps = echo.gather.get_measurement_by_concept_focused( CONST.MEAN_ARTERIAL_PRESSURE )
-
-if len(maps) == 0:
-    print("Note: Arterial BP was not measured in this patient.")
+maps = echo.gather.get_measurement_by_concept_focused( [CONST.MEAN_ARTERIAL_PRESSURE_INVASIVE, CONST.MEAN_ARTERIAL_PRESSURE_NONINVASIVE]  )
 
 for map in maps:
     print (map)
@@ -50,7 +47,11 @@ print("\n# Other Labs ##\n")
 for measure in measures:
     print (measure)
 
+print("\n---Progress note of Day 1")
+print( echo.get_resident_progress_note())
+
 next_day_exist = echo.focus.hours_later(hours=24)
+print(next_day_exist)
 measures = echo.gather.get_all_measurements_focused()
 
 if len(measures) >= 1:
@@ -60,14 +61,88 @@ if len(measures) >= 1:
         print (measure)
 
 
-cohort = CohortBuilder.EventCohortBuilder(echo)
+
+echo.set_focus( icu_visits[0] )
+echo.focus.set_start_end_date( icu_visits[0].get_start_datetime(), icu_visits[0].get_end_datetime() )
+
+print("\n---Progress note of Day 2")
+print( echo.get_resident_progress_note())
+
+print("\n\n------- All antibiotic exposure")
+antibiotics_exposures = echo.gather.get_all_drug_exposure_by_type_unfocused( CONST.ANTIBIOTICS )
+if len(antibiotics_exposures) == 0:
+    print("No known exposure to antibiotics")
+
+for exposure in antibiotics_exposures:
+    print (exposure)
+
+
+print("\n\n------- Exposure to Antibiotics during the ICU visit.")
+antibiotics_exposures = echo.gather.get_all_drug_exposure_by_type_focused( CONST.ANTIBIOTICS )
+if len(antibiotics_exposures) == 0:
+    print("No known exposure to antibiotics")
+
+for exposure in antibiotics_exposures:
+    print (exposure)
+
+print("\n\n------- Vasopressores")
+vasopressor_exposures = echo.gather.get_all_drug_exposure_by_type_focused( CONST.VASOPRESSORS )
+for exposure in vasopressor_exposures:
+    print (exposure)
+
+print("\n\n----- Procedures")
+procedures = echo.gather.get_all_procedure_occurrence_unfocused()
+
+for procedure in procedures:
+    print(procedure)
+
+print("\n\n ----- Device Exposures")
+devices = echo.gather.get_all_device_exposure_unfocused()
+
+for device in devices:
+    print(device)
+
+
+#print("\n\n----- Discharge Summary")
+#print(echo.get_discharge_summary())
+
+
+cohort = CohortBuilder.PeriodCohortBuilder(echo)
+cohort.build()
+print(cohort)
+
 infection_filter = CohortFilters.SignificantInfectionFilter ()
-age_filter = CohortFilters.NumericConceptFilter (concept = CONST.AGE, operator = '>=', value = 25)
-hgb_filter = CohortFilters.NumericConceptFilter (concept = CONST.HEMOGLOBIN, operator = '<=', value = 8)
-cohort.set_event_type ('daily_morning')
-cohort.set_inclusion_filters ( [infection_filter, age_filter, hgb_filter] )
-cohort.build(  )
-(visit, start_time, end_time, index, total) = cohort.next()
+#cohort.set_period_type ('daily_morning' )
+
+
+
+#age_filter = CohortFilters.NumericConceptFilter (concept = CONST.AGE, operator = '>=', value = 20)
+#hgb_filter = CohortFilters.NumericConceptFilter (concept = CONST.HEMOGLOBIN, operator = '<=', value = 8)
+
+# 2am-10am everying morning.
+#
+'''cohort.set_recruitment_probability ( [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.9, 0.9, 0.8, 0.8, 0.1 ])'''
+
+# significant infection (defined in Feb 2016 JAMA)
+
+
+# testing inclusion criteria
+
+# # at least once
+#cohort.set_inclusion_filters ( [infection_filter, age_filter, hgb_filter] )
+
+# ready.....
+#print("\nBuilding cohort......")
+
+#cohort.build()
+
+#print("\nDone!\n")
+
+# cohort summary
+#print(cohort)
+
+# start!
+#(visit, start_time, end_time, index, total) = cohort.next()
 
 
 

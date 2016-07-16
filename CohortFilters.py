@@ -1,18 +1,22 @@
 from OHDSIConstants import CONST
-
+from datetime import timedelta
 
 def compare( value1,  operator, value2 ):
 
+   # if( isinstance( value1, timedelta) and isinstance( value1, int ) ):
+    #    value1 = timedelta.
+
+
     if (operator == '='):
-        return ( value1 ==value2)
+        return ( value1 == value2)
     if (operator == ">"):
-        return ( value1 >value2)
+        return ( value1 > value2)
     if (operator == "<"):
-        return ( value1 <value2)
+        return ( value1 < value2)
     if (operator == ">="):
-        return ( value1 >=value2)
+        return ( value1 >= value2)
     if (operator == "<="):
-        return ( value1 <=value2)
+        return ( value1 <= value2)
 
     return None
 
@@ -24,12 +28,48 @@ class COHORTTYPE:
     MOMENT_MORNING_LAB = 5 # returns list of visit_occurrences + start_time, end_time
     MOMENT_CBC_CHEM7 = 6
 
+
 class SignificantInfectionFilter:
 
     def __init__(self):
         return
 
-    def if_event_mett_filter(self, visit, time_point, hours_within, echo):
+    def if_period_meet_filter (self, visit, start_time, end_time, echo):
+        # it tells you whether certain moment given was followed by the development of septic shock.
+        '''Sepsis-3 criteria for infection in EHR [Feb 2016, JAMA]:
+            (1) Combination of culture sampling (blood, urine, CSF, etc) and start time to occur within a specific time epoch
+                -> a. if antibiotics was given first, the culture sampling must have been obtained within 24 hours.
+                   b. If the culture sampling was first, the antibiotic must have been ordered within 72 horus.
+                   c. the onset of infection was defined as the time at which the first of these 2 events occured.
+
+            return_value = []
+            lab_abx_combinations = [ ]
+
+            echo.set_focus ( visit )
+            cultures = echo.gather.get_measurements_by_id ( CONST.BLOODCULTURE )
+            cultures = cultures + echo.gather.get_measurements_by_id ( CONST.URINECULTURE )
+            cultures = cultures + echo.gather.get_measurements_by_id ( CONST.CSFCULTURE )
+            cultures = cultures + echo.gather.get_measurements_by_id ( CONST.OTHERCULTURE )
+
+            for culture in cultures:
+                echo.focus.set_start_datetime_with_duration (  culture.get_date_time(), deltatime( hours = 72) )
+                answer = echo.ask.if_given_new_antibiotics()
+
+                if ( answer[0] == True ):
+
+                    culture_event = culture
+                    antibiotics_administration_event = answer[1]
+
+                    return_value.append(  (culture_event, antibiotics_event)  )
+
+            if ( len(return_value) == 0 ):
+                return ( True, {'administration_culture_events': return_value} )
+            else:
+                return ( False, {} )
+
+        '''
+
+
         return (True, {})
 
 class SepticShockFilter:
@@ -51,8 +91,9 @@ class SepticShockFilter:
         # Returns (True, {}) is the visit was complicated with septic shock (sepsis3 or other)
         return
 
-    def if_moment_meet_filter (self, visit, time_point, hours_within, echo):
+    def if_period_meet_filter (self, visit, start_time, end_time, echo):
         # it tells you whether certain moment given was followed by the development of septic shock.
+        return (True, {})
         return
 
 
@@ -66,15 +107,17 @@ class NumericConceptFilter:
         self.concept = concept
         self.operator = operator
         self.value = value
+
+       # self.type = type
         return
 
-    def if_event_meet_filter (self, type, visit, start_time, end_time, echo):
+    def if_period_meet_filter (self, visit, start_time, end_time, echo):
         echo.set_focus(visit)
 
         if (self.concept == CONST.AGE):
-            time_on_visit = visit.get_start_datetime
+            time_on_visit = visit.get_start_datetime()
             patient = visit.get_person()
-            age = patient.how_old_at(time_on_visit)
+            age = patient.get_age_at(time_on_visit).days/365
 
             if compare(age, self.operator, self.value) == True:
                 return (True, {'age': age})
@@ -160,3 +203,27 @@ class NumericConceptFilter:
             return (True, { 'labs_meet_criteria': labs_meet, 'labs_not_meet_criteria': labs_not_meet } )
         else:
             return (False, {  'labs_meet_criteria': labs_meet, 'labs_not_meet_criteria': labs_not_meet })
+
+    '''
+    def if_period_meet_filter (self, visit, start_time, end_time, echo):
+        # it tells you whether certain moment given was followed by the development of septic shock.
+        echo.set_focus (visit)
+        echo.focus.set_start_end_datetime(start_time, end_time)
+        measurements = echo.gather.get_measurement_by_concept_focused ( self.concept )
+        measurements_meet = []
+        measurements_not_meet = []
+
+        for measurement in measurements:
+            if compare(measurement.value, self.operator, self.value) == True:
+                measurements_meet.append(measurement)
+            else:
+                measurements_not_meet.append(measurement)
+
+        # if type = at_least 0
+        if len( measurements_meet > 0 ):
+            return (True, {'measurements_meet_criteria': measurements_meet, 'measurements_not_meet_criteria': measurements_not_meet})
+        else:
+            return (False, {'measurements_meet_criteria': measurements_meet, 'measurements_not_meet_criteria': measurements_not_meet})
+
+        return (False, {})
+    '''
