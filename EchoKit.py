@@ -6,13 +6,14 @@ from ClinicalData import LabValue
 from ClinicalData import DrugExposure
 from ClinicalData import ProcedureOccurrence
 from ClinicalData import DeviceExposure
+from ClinicalData import PersonPeriod
 from OHDSIConstants import CONST
 import CareSite
 from datetime import timedelta
 from datetime import datetime
 from datetime import date
 
-SINGLE_VISIT, VISIT, SINGLE_PATIENT, PATIENTS, VISITS = range(5)
+SINGLE_VISIT, VISIT, SINGLE_PATIENT, PATIENTS, VISITS, PERSON_PERIOD = range(6)
 
 class Echo:
 
@@ -119,6 +120,7 @@ class Focus:
     duration = None
     start_datetime = None
     end_datetime = None
+    axis_datetime = None
     target = None
     talking = True
     echo = None
@@ -136,6 +138,14 @@ class Focus:
 
         self.target = target
 
+        if ( isinstance(target, PersonPeriod) ):
+            self.type = PERSON_PERIOD
+            self.start_datetime = target.start_datetime
+            self.end_datetime = target.end_datetime
+            self.axis_datetime = target.axis_datetime
+            self.patient = target.person
+
+
         if ( isinstance(target, ICUVisit) ):
             self.type = SINGLE_VISIT
             self.echo.say('\nEcho: "Okay, I will focus on the visit of the patient_id: ' + str(target.person_id) + ', who visited ICU on ' + str(target.start_date) + '."\n')
@@ -145,6 +155,8 @@ class Focus:
         if( isinstance(target, Person)):
             self.type = SINGLE_PATIENT
             self.patient = target
+
+
 
     def set_time_point(self, timepoint, duration = timedelta(hours=4) ):
 
@@ -635,7 +647,6 @@ class GatherEcho:
             # single_visit_data[2] is concept_id for 'inpatient visit (9201), which is obvious when building an object for ICUVisit
 
             site = CareSite.get_site_by_name(self.care_sites, single_visit_data[9])
-            print (site)
 
             visit = ICUVisit(
                 icu_visit_id = single_visit_data[0],

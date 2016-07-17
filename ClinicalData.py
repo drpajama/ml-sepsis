@@ -46,7 +46,7 @@ class PersonPeriod:
 
 
     def __repr__(self):
-        temp = "[Patient ID: " + str(self.person.person_id) + "] " + "Between " + str(self.start_datetime) + " and " + str(self.end_datetime) + "\n"
+        temp = "[Patient ID: " + str(self.person.person_id) + "/" + str(self.person.get_age_at( self.start_datetime ).days/365) + " yo] " + "Between " + str(self.start_datetime) + " and " + str(self.end_datetime) + "\n"
 
         return temp
 

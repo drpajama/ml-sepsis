@@ -33,3 +33,6 @@ class CareSite:
 
     def description(self):
         return self.site_name + " (Concept ID: " + str(self.site_concept_id) + " / " + self.site_source_value + ")"
+
+    def __repr__(self):
+        return "self.site_name"

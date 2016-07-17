@@ -1,24 +1,7 @@
 from OHDSIConstants import CONST
 from datetime import timedelta
 
-def compare( value1,  operator, value2 ):
 
-   # if( isinstance( value1, timedelta) and isinstance( value1, int ) ):
-    #    value1 = timedelta.
-
-
-    if (operator == '='):
-        return ( value1 == value2)
-    if (operator == ">"):
-        return ( value1 > value2)
-    if (operator == "<"):
-        return ( value1 < value2)
-    if (operator == ">="):
-        return ( value1 >= value2)
-    if (operator == "<="):
-        return ( value1 <= value2)
-
-    return None
 
 class COHORTTYPE:
     PATIENT_COHORT = 1 # returns list of patient_id who pass the filter
@@ -95,55 +78,6 @@ class SepticShockFilter:
         # it tells you whether certain moment given was followed by the development of septic shock.
         return (True, {})
         return
-
-
-class NumericConceptFilter:
-    concept = 0
-    operator = None
-    value = None
-    type = 'at_least'
-
-    def __init__ ( self, concept, operator, value ):
-        self.concept = concept
-        self.operator = operator
-        self.value = value
-
-       # self.type = type
-        return
-
-    def if_period_meet_filter (self, visit, start_time, end_time, echo):
-        echo.set_focus(visit)
-
-        if (self.concept == CONST.AGE):
-            time_on_visit = visit.get_start_datetime()
-            patient = visit.get_person()
-            age = patient.get_age_at(time_on_visit).days/365
-
-            if compare(age, self.operator, self.value) == True:
-                return (True, {'age': age})
-            else:
-                return (False, {'age': age})
-        else:
-            echo.focus.set_start_end_datetime( start_time, end_time )
-            measurements = echo.gather.get_measurement_by_concept_focused(self.concept)
-
-        measurements_meet = []
-        measurements_not_meet = []
-
-        for measurement in measurements:
-
-            if compare(measurement.value, self.operator, self.value) == True:
-                measurements_meet.append(measurement)
-            else:
-                measurements_not_meet.append(measurement)
-
-        if (len(measurements_meet) >= 1):
-            return (True, {'measurements_meet_criteria': measurements_meet,
-                           'measurements_not_meet_criteria': measurements_not_meet})
-        else:
-            return (False, {'measurements_meet_criteria': measurements_meet,
-                            'measurements_meet_criteria': measurements_not_meet})
-
 
 
 
