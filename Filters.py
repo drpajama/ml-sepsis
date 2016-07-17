@@ -25,6 +25,13 @@ class Filter:
     def if_period_meet_filter(self, person_period, echo):
         return (False, {} )
 
+class SignificantInfectionFilter(Filter):
+
+    def __init__ (self):
+        return
+
+
+
 class NumericConceptFilter(Filter):
     concept = 0
     operator = None

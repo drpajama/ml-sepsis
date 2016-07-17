@@ -140,12 +140,57 @@ class Visit:
 
     def __repr__(self):
         return "\n" + "Visit ID: " + str(self.visit_id) + "\nPatient ID: " + str(
-            self.person_id) + "\nCareSite: " + self.care_site.description() + "\nDuration: Hospitalized in the hospital starting from " + str(
+            self.person_id) + "\nCareSite: " + str(self.care_site) + "\nDuration: Hospitalized in the hospital starting from " + str(
             self.get_start_datetime()) + " until " + str(self.get_end_datetime()) + " (Total: " + str(
             self.get_duration()) + " )"
 
     def description(self):
         print(self.__repr__(self))
+
+class Hospitalization(Visit):
+
+    visit_type = 0
+
+    def __init__ (self, visit_id, person_id, start_date, start_time, end_date, end_time, visit_type, care_site = 0, echo = None):
+        self.visit_id = visit_id
+        self.person_id = person_id
+
+        self.start_date = start_date
+        self.start_time = datetime.strptime(start_time, '%H:%M:%S')
+
+        self.end_date = end_date
+        self.end_time = datetime.strptime(end_time, '%H:%M:%S')
+
+        self.visit_type = visit_type
+        self.echo = echo
+
+        care_site = CareSite(0,'',0, '')
+        self.care_site = care_site
+
+    def __repr__(self):
+        return "\n" + "Visit ID (Hospital Admission ID): " + str(self.visit_id) + "\nPatient ID: " + str(
+            self.person_id) + "\nDuration: Hospitalized in the hospital starting from " + str(
+            self.get_start_datetime()) + " until " + str(self.get_end_datetime()) + " (Total: " + str(
+            self.get_duration()) + " )" + "\nHospitalization Type: " + self.describe_visit_type()
+
+    def describe_visit_type(self):
+
+        if self.visit_type == CONST.HOSPITALIZATION_NEWBORN:
+            temp = "Newborn Hospitalization"
+        elif self.visit_type == CONST.ER_VISIT:
+            temp = "ER Visit"
+        elif self.visit_type == CONST.ELECTIVE_ADMISSION:
+            temp = "Elective Admission"
+        elif self.visit_type == CONST.TRANSFER_FROM_HOSPITAL:
+            temp = "Transfer from other hospital"
+        elif self.visit_type == CONST.PATIENT_REFERRAL:
+            temp = "Patient referral"
+        elif self.visit_type == CONST.TRANSFER_TO_ER:
+            temp = "Transfer to ER"
+        else:
+            temp = "Visit type unspecified"
+
+        return temp
 
 
 class ICUVisit(Visit):
@@ -166,6 +211,25 @@ class ICUVisit(Visit):
 
         self.care_site = care_site
         self.echo = echo
+
+    def get_hospitalization_datetime(self):
+        if self.echo == None:
+            raise ValueError("Retriving Hospitalization requires an access to the database and echo is None in the ICUVisit Object. ")
+
+
+        hospitalizations = self.echo.gather.get_all_hospitalization_by_person_id(self.person_id)
+
+        for hospitalization in hospitalizations:
+            start_time_hospitalization = hospitalization.get_start_datetime()
+            end_time_hospitalization = hospitalization.get_end_datetime()
+
+            start_time_icu = self.get_start_datetime()
+
+
+            if ( start_time_icu >= start_time_hospitalization and start_time_icu < end_time_hospitalization ):
+                return hospitalization
+
+        return None
 
 
     def __repr__(self):
@@ -246,6 +310,38 @@ class DrugExposure:
     @property
     def timepoint(self):
         return self.start_time
+
+    # Determine an exposure is the same regimen with the other.
+    def if_the_same_with( self, another_exposure ):
+
+        if self.drug_concept_id == another_exposure.drug_concept_id:
+            return True
+
+        # It is possible that the administrations of same class of antibiotics have different concept_it. The names could be the same
+        if self.name == another_exposure.name:
+
+            return True
+
+        fist_agent_expsosure1 = self.name.split('/')[0].rstrip().lower() # Trimethoprim/Sulfomethoxazole --> trimethoprim
+        fist_agent_expsosure2 = another_exposure.name.split('/')[0].rstrip().lower()
+
+        if fist_agent_expsosure1 == fist_agent_expsosure2:
+            return True
+
+        return False
+
+    def if_the_first_dose ( self, exposures, echo ):
+        earlist_in_the_same_class = self
+
+        for exposure in exposures:
+            if earlist_in_the_same_class.start_time < exposure.start_time:
+                earlist_in_the_same_class = exposure
+
+        if earlist_in_the_same_class.start_time == self.start_time:
+            return (True, None)
+        else:
+            return (False, earlist_in_the_same_class)
+        
 
     def __repr__(self):
         temp = ""

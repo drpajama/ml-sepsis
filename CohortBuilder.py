@@ -81,6 +81,7 @@ class PeriodCohortBuilder(CohortBuilder):
     current_cursor_index = 0
     max_index = 0
     maximum_subject_number = 0
+    visit_type = 0
 
     def __init__(self, echo):
         self.echo = echo
@@ -91,6 +92,12 @@ class PeriodCohortBuilder(CohortBuilder):
 
     def set_maximum_subject_number(self, maximum_subject_number):
         self.maximum_subject_number = maximum_subject_number
+
+    def get_target_by_index(self, index):
+        return self.cohort_list[index]
+
+    def set_visit_type(self, visit_type):
+        self.visit_type = visit_type
 
     def next(self):
 

@@ -35,4 +35,6 @@ class CareSite:
         return self.site_name + " (Concept ID: " + str(self.site_concept_id) + " / " + self.site_source_value + ")"
 
     def __repr__(self):
-        return "self.site_name"
+        if self.site_concept_id == 0:
+            return "Not Applicable"
+        return self.site_name + " (Concept ID: " + str(self.site_concept_id) + " / " + self.site_source_value + ")"
