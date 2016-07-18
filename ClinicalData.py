@@ -295,6 +295,7 @@ class DrugExposure:
     route = None
     hadm_id = None
     name = None
+    is_first = None
 
     def __init__ (self, person_id, drug_concept_id, drug_type_id, start_time, end_time, dose = 1, dose_unit_id = 8513, route = CONST.ADMINISTRATION_INTRAVENOUS, name = None):
         self.person_id = person_id
@@ -330,21 +331,39 @@ class DrugExposure:
 
         return False
 
-    def if_the_first_dose ( self, exposures, echo ):
+    def how_many_from (self, exposures):
+        number = 0
+
+        for exposure in exposures:
+            if self.if_the_same_with(exposure) == True:
+                number = number + 1
+
+        return number
+
+    def if_the_first_dose ( self, exposures ):
         earlist_in_the_same_class = self
 
         for exposure in exposures:
-            if earlist_in_the_same_class.start_time < exposure.start_time:
+            if self.if_the_same_with(exposure) == True and earlist_in_the_same_class.start_time > exposure.start_time:
                 earlist_in_the_same_class = exposure
 
         if earlist_in_the_same_class.start_time == self.start_time:
+            earlist_in_the_same_class.is_first = True
             return (True, None)
         else:
             return (False, earlist_in_the_same_class)
         
 
     def __repr__(self):
+
+
+
         temp = ""
+        temp2 = "administered"
+
+        if self.is_first == True:
+            temp = temp + "[*First Dose*]"
+            temp2 = "initiated"
 
         if self.route == CONST.CONTINUOUS_INFUSION and self.drug_type_id == CONST.VASOPRESSORS:
             temp = temp + "[IV Drip/Vasopressor] "
@@ -363,7 +382,7 @@ class DrugExposure:
                 temp = temp + '(unit unspecified) '
             temp = temp + "Given at " + str(self.start_time) + " - " + str(self.end_time) + " (Duration: "  + str(self.end_time-self.start_time) + ")"
         else:
-            temp = temp + self.name + " was administered at " + str(self.start_time) + " (finished at " + str(self.end_time) + "). Drug concept ID: " + str(self.drug_concept_id) + ". "
+            temp = temp + self.name + " was " + temp2 + " at " + str(self.start_time) + " (finished at " + str(self.end_time) + "). Drug concept ID: " + str(self.drug_concept_id) + ". "
 
         if self.drug_type_id == CONST.ANTIBIOTICS:
             temp = temp + "The medication is in the category of antibiotics (" + str(CONST.ANTIBIOTICS) + ") "

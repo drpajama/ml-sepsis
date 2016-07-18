@@ -12,6 +12,7 @@ class COHORTTYPE:
     MOMENT_CBC_CHEM7 = 6
 
 
+
 class SignificantInfectionFilter:
 
     def __init__(self):
@@ -77,8 +78,6 @@ class SepticShockFilter:
     def if_period_meet_filter (self, visit, start_time, end_time, echo):
         # it tells you whether certain moment given was followed by the development of septic shock.
         return (True, {})
-        return
-
 
 
     def if_visit_meet_filter (self, visit, echo):

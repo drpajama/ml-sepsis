@@ -24,12 +24,14 @@ class Echo:
 
     ask = None
     gather = None
+    filter = None
 
     def __init__ (self, db_connect):
         self.db_connect = db_connect
         self.focus = Focus(self)
         self.ask = AskEcho(self)
         self.gather = GatherEcho(self)
+        self.filter = Filter()
 
     def copy(self):
         echo = Echo(self.db_connect)
@@ -355,13 +357,13 @@ class GatherEcho:
             devices_processed.append(device)
         return devices_processed
 
-    def get_all_procedure_occurrence_focused_by_concept_id_list(self, concept_id_list):
+    def get_all_procedure_occurrence_focused_by_concept_id_list(self, concept_id_list, name_list=[]):
 
 
         if self.echo.focus == None:
             return
 
-        procedures = self.get_all_procedure_occurrence_unfocused_by_concept_id_list(concept_id_list)
+        procedures = self.get_all_procedure_occurrence_unfocused_by_concept_id_list(concept_id_list, name_list )
         procedures_met = []
 
         for procedure in procedures:
@@ -371,27 +373,30 @@ class GatherEcho:
         return procedures_met
 
 
-    def get_all_procedure_occurrence_unfocused_by_concept_id_list (self, concept_id_list ):
+    def get_all_procedure_occurrence_unfocused_by_concept_id_list (self, concept_id_list, name_list = [] ):
         data = []
 
         for single in concept_id_list:
             data = data + self.get_all_procedure_occurrence_by_concept_id_raw(single)
 
+        for single in name_list:
+            data = data + self.get_all_procedure_occurrence_by_name_raw( single )
+
         procedures_processed = []
 
         for single_data in data:
-            date = single_data[3]
-            time = datetime.strptime(single_data[12], '%H:%M:%S')
+            date = single_data['procedure_date']
+            time = datetime.strptime(single_data['procedure_time'], '%H:%M:%S')
 
             procedure_datetime = datetime(year=date.year, month=date.month, day=date.day, hour=time.hour,
                                           minute=time.minute, second=time.second)
 
             procedure = ProcedureOccurrence(
-                person_id=single_data[1],
-                procedure_concept_id=single_data[2],
-                procedure_type_id=single_data[4],
+                person_id=single_data['person_id'],
+                procedure_concept_id=single_data['procedure_concept_id'],
+                procedure_type_id=single_data['procedure_type_concept_id'],
                 procedure_time=procedure_datetime,
-                name=single_data[9]
+                name=single_data['procedure_source_value']
             )
 
             procedures_processed.append(procedure)
@@ -429,6 +434,22 @@ class GatherEcho:
 
     def get_all_procedure_occurrence_unfocused (self):
         return self.get_all_procedure_occurrence_unfocused_by_concept_id(None)
+
+    def get_only_first_doses(self, exposures):
+
+        first_doses = []
+
+        for exposure in exposures:
+
+            #print("for : " + str(exposure))
+            if_first_dose =  exposure.if_the_first_dose( exposures )
+            #print if_first_dose
+
+            if if_first_dose[0] == True:
+                first_doses.append( exposure )
+
+        return first_doses
+
 
 
     def get_all_drug_exposure_by_type_unfocused(self, type):
@@ -477,15 +498,22 @@ class GatherEcho:
 
         return exposures_met
 
+    def get_all_procedure_occurrence_by_name_raw(self, name):
+
+        name = "'" + name + "'"
+        data = self.echo.excuteSQL_dict("SELECT * from ohdsi.procedure_occurrence WHERE person_id=" + str(
+            self.echo.focus.patient.person_id) + " and lower(procedure_source_value) = " + name )
+        return data
+
     def get_all_procedure_occurrence_by_concept_id_raw (self, concept_id):
 
         temp = str(concept_id)
 
-        data = self.echo.excuteSQL("SELECT * from ohdsi.procedure_occurrence WHERE person_id=" + str(self.echo.focus.patient.person_id) + " and procedure_concept_id = " + temp )
+        data = self.echo.excuteSQL_dict("SELECT * from ohdsi.procedure_occurrence WHERE person_id=" + str(self.echo.focus.patient.person_id) + " and procedure_concept_id = " + temp )
         return data
 
     def get_all_procedure_occurrence_raw (self):
-        data = self.echo.excuteSQL("SELECT * from ohdsi.procedure_occurrence WHERE person_id=" + str(self.echo.focus.patient.person_id)  )
+        data = self.echo.excuteSQL_dict("SELECT * from ohdsi.procedure_occurrence WHERE person_id=" + str(self.echo.focus.patient.person_id)  )
         return data
 
     def get_all_drug_exposure_by_type_raw(self, type):
@@ -855,6 +883,16 @@ class AskEcho:
                             death_date) + ', which IS NOT between ' + str(start_datetime) + ' and ' + str(
                             end_datetime) + '.\n')
                     return (False, dict(death_date=death_date))
+
+
+class Filter:
+
+    def remove_if_only_one_dose( exposures ):
+
+        return_exposures = []
+
+
+        return
 
 
 class Loader:

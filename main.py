@@ -1,7 +1,6 @@
 
 import EchoKit
 import CohortBuilder
-import Criteria
 import Filters
 import CohortFilters
 from datetime import timedelta
@@ -18,6 +17,14 @@ echo = EchoKit.Echo( loader.get_connection() )
 echo.hello_echo()
 echo.shutup()
 
+#TestModule.test_infection_cohort(echo)
+#TestModule.test_septic_shock_filter(echo)
+#TestModule.test_reverse_infection(echo)
+#TestModule.small_cohort_building(echo)
+#TestModule.test_infection2_filter(echo)
+
+
+'''
 cohort = CohortBuilder.PeriodCohortBuilder(echo)
 cohort.set_selection_type ('daily_morning')
 cohort.set_visit_type( CONST.ICU_ADMISSION ) # Not general ward
@@ -28,29 +35,24 @@ cohort.set_inclusion_filters( [age_filter] )
 
 cohort.set_maximum_subject_number( 200 )
 cohort.build()
-
+'''
 
 #print(cohort)
 #target = cohort.next()
 
-target = cohort.get_by_index(5)
+
+# Culture-Abx relationship. See the subject 82010.
+'''target = cohort.get_by_index(13)
+
 
 print(target)
 echo.set_focus ( target )
 
-axis_time = target.axis_datetime  # 6am
-cohort_start_time = target.start_datetime # 2am
-cohort_end_time = target.end_datetime # 10am
-hospitalization = echo.gather.get_hospitalization( target.person.person_id, target.start_datetime ) # the record of the entire hospitalization which the current cohort belongs to.
+if_target_has_significant_infection = infection_filter.if_period_meet_filter(target, echo)
+print(if_target_has_significant_infection)
+'''
 
-admission_time = hospitalization.get_start_datetime()
-discharge_time = hospitalization.get_end_datetime()
-
-echo.focus.set_start_end_datetime( admission_time, axis_time ) # between admission - current time
-abx_exposures = echo.gather.get_all_drug_exposure_by_type_focused( CONST.ANTIBIOTICS )
-cultures = echo.gather.get_all_procedure_occurrence_focused_by_concept_id_list ( [CONST.BLOOD_CULTURE, CONST.URINE_CULTURE, CONST.STOOL_CULTURE,CONST.CSF_CULTURE] ) # PANCULTURE MISSED!
-
-print abx_exposures[0]
+#print abx_exposures[0]
 
 
 #test_exposure = ClinicalData.DrugExposure(person_id = 82010, drug_concept_id = 17711612, drug_type_id= 21603553, start_time = admission_time, end_time = discharge_time, dose=1,dose_unit_id=8513, route=CONST.ADMINISTRATION_INTRAVENOUS, name = "cefazolin/Trimethoprim" )
