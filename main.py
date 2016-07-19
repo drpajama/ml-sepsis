@@ -17,6 +17,8 @@ echo = EchoKit.Echo( loader.get_connection() )
 echo.hello_echo()
 echo.shutup()
 
+TestModule.cohort_any_shock(echo)
+
 #TestModule.test_infection_cohort(echo)
 #TestModule.test_septic_shock_filter(echo)
 #TestModule.test_reverse_infection(echo)

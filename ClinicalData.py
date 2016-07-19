@@ -1,6 +1,7 @@
 
 # Abstracted Clinical Data in Class Structures
 
+from datetime import date
 from datetime import datetime
 from datetime import timedelta
 from OHDSIConstants import CONST
@@ -44,6 +45,12 @@ class PersonPeriod:
         self.end_datetime = end_datetime
         self.axis_datetime = axis_datetime
 
+    def get_start_date(self):
+        date_start = date (year=self.start_datetime.year, month=self.start_datetime.month, day=self.start_datetime.day)
+        return date_start
+
+    def get_end_date(self):
+        return date(year=self.end_datetime.year, month=self.end_datetime.month, day=self.end_datetime.day)
 
     def __repr__(self):
         temp = "[Patient ID: " + str(self.person.person_id) + "/" + str(self.person.get_age_at( self.start_datetime ).days/365) + " yo] " + "Between " + str(self.start_datetime) + " and " + str(self.end_datetime) + "\n"
@@ -113,6 +120,7 @@ class Visit:
 
         self.care_site = care_site
         self.echo = echo
+
 
     def get_start_datetime(self):
         return datetime(year=self.start_date.year, month=self.start_date.month, day=self.start_date.day,
@@ -380,7 +388,7 @@ class DrugExposure:
                 temp = temp + ' unit/hour. '
             else:
                 temp = temp + '(unit unspecified) '
-            temp = temp + "Given at " + str(self.start_time) + " - " + str(self.end_time) + " (Duration: "  + str(self.end_time-self.start_time) + ")"
+            temp = temp + "Given between " + str(self.start_time) + " - " + str(self.end_time) + " (Duration: "  + str(self.end_time-self.start_time) + ")"
         else:
             temp = temp + self.name + " was " + temp2 + " at " + str(self.start_time) + " (finished at " + str(self.end_time) + "). Drug concept ID: " + str(self.drug_concept_id) + ". "
 

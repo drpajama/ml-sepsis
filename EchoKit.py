@@ -35,6 +35,7 @@ class Echo:
 
     def copy(self):
         echo = Echo(self.db_connect)
+        echo.shutup()
         return echo
 
     def hello_echo(self):
@@ -59,25 +60,57 @@ class Echo:
 
         if (self.focus != None):
             self.focus.talking = False
-
+    def commit_close_db(self):
+        self.db_connect.commit()
+        self.db_connect.close()
 
     def excuteSQL_dict(self, query):
         cur = self.db_connect.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute (query)
-        return cur.fetchall()
+        try:
+            return cur.fetchall()
+        except psycopg2.ProgrammingError:
+            return
 
 
     def excuteSQL(self, query):
+
         cur = self.db_connect.cursor()
         cur.execute (query)
-        return cur.fetchall()
+        try:
+            return cur.fetchall()
+        except psycopg2.ProgrammingError:
+            return
 
 
     def set_focus(self, target):
         self.focus.set_focus(target)
 
+    def get_note_by_name (self, name):
+        data = self.excuteSQL("SELECT * FROM mimiciii.noteevents as n WHERE n.subject_id = " + str(
+            self.focus.patient.person_id) + "  and n.category = '" + name + "'")
+        print (data)
+
+        temp = ""
+
+        for single in data:
+
+            date = single[3]
+            print(date)
+            if self.focus.if_fall_into_date(date):
+                temp = str(single[3])
+                temp = temp + "\n"
+                temp = temp + single[6]
+                temp = temp + "\n"
+                temp = temp + single[7]
+                temp = temp + "\n"
+                temp = temp + single[10]
+                return temp
+
+        return ""
+
     def get_resident_progress_note(self):
-        data = self.excuteSQL("SELECT * FROM mimiciii.noteevents as n WHERE n.subject_id = " + str(self.focus.patient.person_id) + "  and n.description = 'Physician Resident Progress Note'")
+        data = self.excuteSQL("SELECT * FROM mimiciii.noteevents as n WHERE n.subject_id = " + str(self.focus.patient.person_id) + "  and n.category = 'Physician Resident Progress Note'")
 
         temp = ""
 

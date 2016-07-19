@@ -3,6 +3,7 @@ from datetime import timedelta
 import datetime
 from ClinicalData import PersonPeriod
 from UsefulFunctions import *
+import numpy as np
 
 def compare( value1,  operator, value2 ):
 
@@ -104,9 +105,72 @@ class SepticShockFilter(Filter):
 
 
 
+class AnyShockFilter(Filter):
+
+    def __init__(self):
+        return
+
+    def if_period_meet_filter(self, person_period, echo):
+
+        # rebuild into 24 hour period
+        axis_time = person_period.axis_datetime  # 6am
+
+        day_start_time = person_period.start_datetime  # 2am
+
+        day_end_time = person_period.end_datetime  # 10am
+
+        '''hospitalization = echo.gather.get_hospitalization(person_period.person.person_id,
+                                                          person_period.start_datetime)  # the record of the entire hospitalization which the current cohort belongs to.
+
+        if hospitalization != None:
+            admission_time = hospitalization.get_start_datetime()
+            discharge_time = hospitalization.get_end_datetime()
+
+        '''
+
+
+
+        echo.set_focus(person_period)
+        echo.focus.set_start_end_datetime(day_start_time, day_end_time)  # between admission - current time
+
+        # option 1: On pressor
+        pressor_exposures = echo.gather.get_all_drug_exposure_by_type_focused(CONST.VASOPRESSORS)
+
+        # optiona2: bp
+        maps = echo.gather.get_measurement_by_concept_focused(
+            [CONST.MEAN_ARTERIAL_PRESSURE_INVASIVE, CONST.MEAN_ARTERIAL_PRESSURE_NONINVASIVE])
+
+
+        # reject outliers + find lowest values
+
+        how_many_less_than_75 = 0
+
+        lowest_map = 9999
+        for map in maps:
+            if map.value < 75:
+                how_many_less_than_75 = how_many_less_than_75 + 1
+
+        if len(pressor_exposures) >= 1 and how_many_less_than_75 >= 4:
+            return (True, {})
+        else:
+            return (False, {})
+
+
+def reject_outliers( data  ):
+
+    # refused 2 x standard deviation
+
+    m = 2
+    u = np.mean(data)
+    s = np.std(data)
+    filtered = [e for e in data if (u - 2 * s < e < u + 2 * s)]
+    return filtered
+
+
 class SignificantInfectionFilter(Filter):
 
     def __init__ (self):
+
         return
 
 

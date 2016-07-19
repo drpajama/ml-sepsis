@@ -140,6 +140,68 @@ class PeriodCohortBuilder(CohortBuilder):
     def get_by_index(self, index):
         return self.cohort_list[index]
 
+    def populate_cohort_table(self, concept_id, echo):
+
+        for element in self.cohort_list:
+            id = element.person.person_id
+            date_start = element.get_start_date()
+            date_end = element.get_end_date()
+
+            echo.excuteSQL("INSERT INTO ohdsi.cohort (cohort_definition_id, subject_id, cohort_start_date, cohort_end_date) VALUES(" + str(concept_id) + ", " + str(id) + ", DATE '" + str(date_start) + "', DATE '" + str(date_end) + "')")
+
+
+    def build_daily(self):
+        self.number_of_total_icu_visits = self.echo.ask.how_many_total_icu_visits()
+
+        # Index is total number of ICU visit - 1 (as it starts from 0)
+        self.max_visit_index = self.number_of_total_icu_visits - 1
+        if (self.max_visit_index > self.maximum_subject_number):
+            self.max_visit_index = self.maximum_subject_number - 1
+
+        self.cohort_list = []
+
+        for index in range(0, self.max_visit_index + 1):
+            visit = self.echo.gather.get_icu_visit_by_index(index)
+
+            if index == 0:
+                self.first_subject_id = visit.person_id
+            elif index == self.max_visit_index:
+                self.last_subject_id = visit.person_id
+
+            duration = visit.get_duration()
+            start_time = visit.get_start_datetime()
+            one_day_later = start_time + datetime.timedelta(hours=24)
+            first_day = datetime.datetime(year=one_day_later.year, month=one_day_later.month, day=one_day_later.day,
+                                              hour=12)
+            one_day_interval = datetime.timedelta(hours=24)
+
+            # Notably, this delta-time could be > 24 hours (maximum around ~28 hours)
+            admission_to_first_morning = (first_day - start_time)
+
+            self.echo.focus.set_start_end_datetime(start_time, visit.get_end_datetime())
+            was_the_patient_in_the_icu_in_the_first_morning = self.echo.focus.if_fall_into(first_day)
+
+            if was_the_patient_in_the_icu_in_the_first_morning == True:
+                total_day_hour_first_morning = (duration - admission_to_first_morning).total_seconds() / 3600
+                total_day_since_first_morning = int(total_day_hour_first_morning / 24)
+                number_of_morning = total_day_since_first_morning + 0  # The last day is ignored.
+            else:
+                number_of_morning = 0
+
+            for i in range(0, number_of_morning):
+                plusminus = datetime.timedelta(hours=12)
+                day_time = start_time + admission_to_first_morning + datetime.timedelta(hours=24 * i)
+                day_start_time = day_time - plusminus
+                day_end_time = day_time + plusminus
+                # self.echo.set_focus(visit)
+
+                person_period = ClinicalData.PersonPeriod(visit.get_person(), day_start_time, day_end_time,
+                                                          day_time)
+                if self.if_pass_filters(person_period) == True:
+                    self.cohort_list.append(person_period)
+
+
+
     def build_for_daily_morning(self):
 
         self.number_of_total_icu_visits = self.echo.ask.how_many_total_icu_visits()
@@ -228,82 +290,9 @@ class PeriodCohortBuilder(CohortBuilder):
         self.current_cursor_index = 0
         if self.type == 'daily_morning':
             self.build_for_daily_morning()
+        else:
+            self.build_daily()
 
-
-        '''
-        tuple_array = []
-        visit_index = 0
-
-
-
-        '''
-        '''if (self.type == 'daily_morning')
-
-        #first_morning =
-
-        for visit_index in range( 0, max_visit_index ):
-            non = []
-            visit = self.echo.gather.get_visit_by_index ( visit_index )
-
-            duration = visit.get_duration()
-            start_time = visit.get_start_datetime()
-            one_day_later = start_time + datetime.timedelta( hours = 24)
-            first_morning = datetime.datetime( year=one_day_later.year, month = one_day_later.month, day= one_day_later.day, hour=6  )
-
-            first_interval = (first_morning - start_time)
-
-
-            total_day_hour = (duration - first_interval).total_seconds() / 3600
-            total_day = int(total_day_hour / 24)
-            number_of_morning = total_day + 1  # patient might get morning lab and leave the ICU.
-            one_day_interval = datetime.timedelta(hours=24)
-
-            # on admission
-            for i in range (0, number_of_morning):
-                ## all morning
-
-                print( "\n====== Day #" + str(i+1) )
-
-                plusminus = datetime.timedelta( hours = 4 )
-                morning_time = start_time + first_interval + datetime.timedelta( hours = 24*i )
-                morning_start_time = morning_time - plusminus
-                morning_end_time = morning_time + plusminus
-
-                self.echo.set_focus(visit)
-                print( str(morning_start_time) + " / "+ str(morning_end_time))
-                self.echo.focus.set_start_end_datetime(morning_start_time, morning_end_time)
-
-                measurements = self.echo.gather.get_all_measurements_focused()
-                for measurement in measurements:
-                    print(measurement)
-
-                # on admission
-                filters = self.inclusion_filters
-
-                meet_all_inclusion_filters = True
-
-                # check if the visit-period meet all inclusion criteria
-                for filter in filters:
-                    if filter.if_period_meet_filter(visit, start_time, morning_end_time,
-                                                    self.echo)[0] == False:
-                        meet_all_inclusion_filters = False
-
-                if (meet_all_inclusion_filters == True):
-                    tuple_array.append((visit_index, visit, morning_start_time, morning_end_time))
-                else:
-                    non.append((visit_index, visit, morning_start_time, morning_end_time))
-
-            '''
-
-
-
-
-        '''
-        self.list = tuple_array
-        print( self.list )
-
-        print(non)
-        '''
 
 
 

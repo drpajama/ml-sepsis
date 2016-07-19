@@ -4,10 +4,138 @@ import Filters
 import CohortFilters
 from datetime import timedelta
 from datetime import time
+from datetime import date
 import TestModule
 import ClinicalData
 from OHDSIConstants import CONST
 from UsefulFunctions import *
+
+def cohort_any_shock(echo):
+
+    cohort = CohortBuilder.PeriodCohortBuilder(echo)
+    cohort.set_selection_type('daily')
+    cohort.set_visit_type(CONST.ICU_ADMISSION)  # Not general ward
+
+
+    shock_filter = Filters.AnyShockFilter()
+    age_filter = Filters.NumericConceptFilter(CONST.AGE, '>=', 20, 'on_start')
+    cohort.set_inclusion_filters([age_filter, shock_filter])
+
+
+
+    cohort.set_maximum_subject_number(100)
+    responder = 0
+
+    inp = raw_input('Who are you?? \n\n1. Researcher a (Joongheum Park)\n2. Researcher b\n\nAnswer>')
+    if inp == '1':
+        responder = 1
+    elif inp == '2':
+        responder =2
+    else:
+        raise ValueError
+
+
+
+    print("Building Cohort......\n(Critiera: vasopressor use with an episode of lowest BP 75)")
+    cohort.build()
+    cohort.populate_cohort_table(196236, echo)
+
+    print(cohort)
+    target = cohort.next()
+
+    target = cohort.get_by_index(12)
+
+    hospitalization = echo.gather.get_hospitalization(target.person.person_id,
+                                                      target.start_datetime)
+    admission_datetime = hospitalization.get_start_datetime()
+
+    echo.set_focus (target)
+
+
+
+    print(target)
+    inp = raw_input('We will show the daily summary of a patient: ' + str(target.person.person_id) + ' during the period of ' + str(target.start_datetime) + '-' + str(target.end_datetime) + '\n<Press Enter>\n')
+
+    #temp_echo = echo.copy()
+    #temp_echo.focus.set_start_end_datetime( admission_datetime, target.axis_datetime )
+
+    cultures = echo.gather.get_all_procedure_occurrence_unfocused_by_concept_id_list(
+        [CONST.BLOOD_CULTURE, CONST.URINE_CULTURE, CONST.STOOL_CULTURE, CONST.CSF_CULTURE, CONST.WOUND_CULTURE],
+        ['pan culture', 'bal fluid culture'])
+
+    inp = raw_input("<Enter> to see the pressor use of the day")
+    print("====================== Pressor Use (of the day) ==============================")
+    pressor_exposures = echo.gather.get_all_drug_exposure_by_type_focused(CONST.VASOPRESSORS)
+    print_list(pressor_exposures)
+
+    inp = raw_input("<Enter> to see the BP trend of the day")
+    print("======================== BP Trend (of the day) ==============================")
+    maps = echo.gather.get_measurement_by_concept_focused(
+        [CONST.MEAN_ARTERIAL_PRESSURE_INVASIVE, CONST.MEAN_ARTERIAL_PRESSURE_NONINVASIVE])
+    print_list (maps)
+
+    inp = raw_input("<Enter> to see the culture since admission day")
+    print ("================= Cultures (since the admission) =================")
+    print_list(cultures)
+
+    all_abx = echo.gather.get_all_drug_exposure_by_type_unfocused(CONST.ANTIBIOTICS)
+    antibiotics_exposures = echo.gather.get_all_drug_exposure_by_type_focused(CONST.ANTIBIOTICS)
+    first_dose_exposures = echo.gather.get_only_first_doses(antibiotics_exposures)
+
+    inp = raw_input("<Enter> to see the antiobitcs given during the ICU visit")
+    print("\n======== ABx Given (during the ICU visit) ====== ")
+    print_list(antibiotics_exposures)
+
+    inp = raw_input("<Enter> to see the entire history of antibiotic use during the hospitalization")
+    print("\n======== ABx Given (all during hospitalization) ====== ")
+    print_list(all_abx)
+
+    inp = raw_input("<Enter> to see the lactate levels")
+    print("\n======== Lactate (of the day) ========")
+
+    lactate_measurements = echo.gather.get_measurement_by_concept_focused(
+        [CONST.LACTATE])
+
+    print_list(lactate_measurements)
+
+
+    inp = raw_input("<Enter> to see clinical measurements/labs of the day")
+    print("\n======== All measurements (of the day) ========")
+
+    lab_measurements = echo.gather.get_all_measurements_focused()
+    print_list(lab_measurements)
+
+    print_list(lactate_measurements)
+
+    '''print("\n==== Physician/Nursing Progress Note (of the day - not available often)=====")
+
+    print( echo.get_note_by_name('Nursing') )
+    print( echo.get_note_by_name('Physician') )
+    '''
+
+    inp = raw_input("<Enter> to see the discharge summary")
+    print( "================= Discharge Summary =======================")
+    print ( echo.get_discharge_summary() )
+
+    inp = raw_input("<Enter> to make your decision.")
+    print("\n================= Type to Decide =====================")
+
+    date_of_shock = date( year = target.start_datetime.year, month = target.start_datetime.month, day =target.start_datetime.day )
+    inp = raw_input('What type of shock was the patient experiencing? \n\n1. Septic Shock\n2. Cardiogenic Shock\n3. Hypovolemic Shock\n4. Other types of shock\n5. Shock with very mixed features (unable to determine)\n6. No shock\n7. Others (please specifiy)\n\n')
+    if inp == '1':
+        print("Okay. I undertood that you think the patient was experiencing septic shock.")
+        echo.excuteSQL( "INSERT INTO extension.shock_differential (person_id, date, physician_1, physician_1_note) VALUES( " + str(target.person.person_id) + ",DATE '" + str(date_of_shock) + "' , "+ str(responder) + " , 'No Comment')" )
+
+    elif inp == '2':
+        print("Okay. I undertood that you think the patient was experiencing cardiogenic shock.")
+
+    inp = raw_input(
+        '\n\nDo you want to continue?\n\n1. Yes\n2. I am done for now. Please save the progress.')
+
+    if inp =='1':
+        print("Ok.")
+
+    echo.commit_close_db()
 
 def test_reverse_infection(echo):
 
@@ -62,6 +190,8 @@ def test_reverse_infection(echo):
 
     reasoning_for_filtering = infection_filter.if_period_meet_filter(test_target, echo)
     print (reasoning_for_filtering)
+
+
 
 
 
